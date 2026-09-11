@@ -1,0 +1,888 @@
+/* =========================================================
+   Mister Contador / Conta Azul — Registro Contábil Theme
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  color: #1e293b;
+  background-color: #eaeff6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Layout Geral: Sidebar fixa à esquerda + conteúdo fluido */
+.mister-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw;
+}
+
+/* Sidebar Vertical Esquerda */
+.mister-sidebar {
+  width: 48px;
+  background-color: #0c2152;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0 14px;
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.sidebar-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sidebar-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.sidebar-btn.active {
+  background-color: #1d4ed8;
+  color: #ffffff;
+}
+
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.mister-logo-mark {
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.mister-version {
+  font-size: 9px;
+  color: #94a3b8;
+  letter-spacing: -0.2px;
+}
+
+/* Área Principal Wrapper */
+.mister-main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+}
+
+/* Topbar Azul Escuro (#003180) */
+.mister-topbar {
+  background-color: #002b80;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.topbar-left .help-link {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.9;
+}
+
+.topbar-left .help-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.company-label {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.company-input-box {
+  background-color: #ffffff;
+  color: #334155;
+  padding: 5px 16px;
+  border-radius: 9999px;
+  font-size: 12px;
+  min-width: 170px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.company-cnpj-pill {
+  background-color: #7dd3fc;
+  color: #0c4a6e;
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  letter-spacing: 0.3px;
+}
+
+/* Conteúdo Principal */
+.mister-content {
+  padding: 16px 24px 70px;
+  flex: 1;
+}
+
+.page-title-row {
+  margin-bottom: 12px;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Barra de Ferramentas / Filtros */
+.controls-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.toolbar-left, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-filter {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-filter:hover {
+  background-color: #1d4ed8;
+}
+
+.arrow-down {
+  font-size: 9px;
+  opacity: 0.8;
+}
+
+.input-pill {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 5px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.date-input {
+  min-width: 190px;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.calendar-icon {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Date Filter Popover */
+.date-filter-wrapper {
+  position: relative;
+}
+
+.date-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  width: 320px;
+  z-index: 60;
+  animation: popoverFade 0.15s ease-out;
+}
+
+@keyframes popoverFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.popover-header strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.btn-close-popover {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.btn-close-popover:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.preset-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.popover-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.preset-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.preset-btn.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.popover-custom {
+  margin-bottom: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.date-range-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.date-field-group label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.date-field-group input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 11.5px;
+  outline: none;
+  color: #1e293b;
+}
+
+.date-field-group input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.popover-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-popover-apply {
+  flex: 1;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-popover-apply:hover {
+  background: #1d4ed8;
+}
+
+.btn-popover-reset {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-popover-reset:hover {
+  background: #e2e8f0;
+}
+
+.select-pill {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.select-pill select {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  appearance: none;
+  padding-right: 14px;
+}
+
+.account-select-pill {
+  background: #ffffff;
+  border: 1px solid #93c5fd;
+}
+
+.account-select-pill select {
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.book-icon {
+  font-size: 13px;
+}
+
+.btn-icon-square {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-navy {
+  background-color: #0c2152;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.btn-navy:hover {
+  background-color: #1e3a8a;
+}
+
+.btn-sandbox-trigger {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-sandbox-trigger:hover {
+  background: #fde68a;
+}
+
+/* Badge Centralizado: Lançamentos 54/27 */
+.badge-centered-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.lancamentos-pill {
+  background-color: #0c2152;
+  color: #ffffff;
+  padding: 4px 6px 4px 14px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.count-bubble {
+  background-color: #1d4ed8;
+  color: #ffffff;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+/* Tabela Excel-like de Registro Contábil */
+.excel-table-container {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.mister-excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.mister-excel-table th {
+  background-color: #ffffff;
+  color: #475569;
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid #cbd5e1;
+  border-right: 1px solid #f1f5f9;
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.mister-excel-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+
+/* Partidas Dobradas (Linha Débito Branca, Linha Crédito Amarelo-Creme) */
+.mister-excel-table tr.row-debit {
+  background-color: #ffffff;
+}
+
+.mister-excel-table tr.row-credit {
+  background-color: #fffde7; /* Amarelo-creme característico do Mister */
+}
+
+.mister-excel-table tr.row-pair-separator td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.mister-excel-table tr:hover {
+  filter: brightness(0.98);
+}
+
+/* Colunas Específicas */
+.col-debit-val {
+  color: #e11d48; /* Vermelho contábil para Débito */
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.col-credit-val {
+  color: #0f172a; /* Preto para Crédito */
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.history-link {
+  color: #0284c7;
+  text-decoration: underline;
+  cursor: pointer;
+  display: inline-block;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-link:hover {
+  color: #0369a1;
+}
+
+.contrapartida-text {
+  color: #64748b;
+  font-size: 10.5px;
+  text-decoration: none;
+  font-style: italic;
+}
+
+.ledger-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.action-icon {
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-block;
+  transition: color 0.15s;
+}
+
+.action-icon:hover {
+  color: #0284c7;
+}
+
+.slash-empty {
+  color: #94a3b8;
+}
+
+/* Rodapé / Paginação */
+.table-footer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px 0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-arrow {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.page-arrow:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.current-page {
+  font-weight: 700;
+  color: #1e293b;
+  background: #ffffff;
+  padding: 2px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Botão Flutuante Central Mister */
+.floating-mister-central {
+  position: fixed;
+  bottom: 20px;
+  right: 24px;
+  background-color: #1d4ed8;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35);
+  cursor: pointer;
+  z-index: 40;
+  transition: all 0.15s;
+}
+
+.floating-mister-central:hover {
+  background-color: #1e40af;
+  transform: translateY(-1px);
+}
+
+.central-m-logo {
+  background: #ffffff;
+  color: #1d4ed8;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+/* Modal / Overlay para Conexão Pluggy na rota raiz */
+.pluggy-connect-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(12, 33, 82, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.connect-modal-box {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-header {
+  background: #002b80;
+  color: #ffffff;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-brand h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.modal-brand p {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.pluggy-bolt {
+  font-size: 24px;
+}
+
+.close-overlay-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.close-overlay-btn:hover {
+  opacity: 1;
+}
+
+.modal-body {
+  padding: 22px 20px;
+}
+
+.credentials-hint-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  font-size: 11.5px;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.credentials-hint-box code {
+  background: #e2e8f0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-start-widget {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-start-widget:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-simulado-link {
+  text-align: center;
+  font-size: 12px;
+  color: #0284c7;
+  text-decoration: none;
+  padding: 8px;
+  font-weight: 600;
+}
+
+.btn-simulado-link:hover {
+  text-decoration: underline;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+}
+
+.modal-input:focus {
+  border-color: #2563eb;
+}
+
+.mini-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

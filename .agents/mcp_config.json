@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "pluggy": {
+      "url": "https://docs.pluggy.ai/mcp",
+      "serverUrl": "https://docs.pluggy.ai/mcp"
+    },
+    "pluggy-docs": {
+      "type": "http",
+      "url": "https://docs.pluggy.ai/mcp",
+      "serverUrl": "https://docs.pluggy.ai/mcp"
+    }
+  }
+}

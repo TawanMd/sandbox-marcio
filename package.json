@@ -1,0 +1,13 @@
+{
+  "name": "pluggy-sandbox-mvp",
+  "version": "1.0.0",
+  "description": "MVP de validação da integração com Pluggy Sandbox (HTML + CSS + JS)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node server.mjs --test"
+  },
+  "keywords": ["pluggy", "sandbox", "open-finance", "mvp"],
+  "author": "",
+  "license": "MIT"
+}

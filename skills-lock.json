@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "pluggy-doctor": {
+      "source": "pluggyai/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pluggy-doctor/SKILL.md",
+      "computedHash": "376f9c205e84facedfec331683ea6354d9fdd964a05b3ecba69f6ec6a4f6f626"
+    },
+    "pluggy-integration": {
+      "source": "pluggyai/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pluggy-integration/SKILL.md",
+      "computedHash": "ba7850e0aa9719549188284e23f8c825a355b9458d130efbe4e760928e467a17"
+    },
+    "pluggy-open-finance": {
+      "source": "pluggyai/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pluggy-open-finance/SKILL.md",
+      "computedHash": "a7c59f2d7f0fbc2f1ed2e66cbf2bb246a10863f4a6d270d0c30045f44234702c"
+    },
+    "pluggy-payments": {
+      "source": "pluggyai/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pluggy-payments/SKILL.md",
+      "computedHash": "bbc5aaf9dc21f4f9452d5ddefd74da52b246ec75bbe23fb0b2d43f72c6a4995c"
+    }
+  }
+}
