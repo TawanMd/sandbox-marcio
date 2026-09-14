@@ -3,216 +3,230 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pluggy Open Finance — Data Explorer</title>
+  <title>Mister Contador — Open Finance Pluggy</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Script Oficial do Pluggy Connect Widget -->
-  <script src="https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js"></script>
+  <!-- Script Oficial do Pluggy Connect Widget (v2.11.0) -->
+  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.11.0/pluggy-connect.js"></script>
 </head>
 <body>
-  <!-- Header Principal Moderno -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand-area">
-        <div class="brand-logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="#2563eb" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="brand-info">
-          <div class="brand-title-row">
-            <h1 class="brand-title">Pluggy Data Explorer</h1>
-            <span class="badge-tag">Open Finance PJ</span>
-            <span class="badge-env" id="envBadge">Sandbox</span>
-          </div>
-          <p class="brand-subtitle">Visualização analítica consolidada de Contas, Cartões, Investimentos e Empréstimos</p>
-        </div>
+  <!-- Topbar Azul Escuro (#002b80) Fiel ao Print do Mister Contador -->
+  <header class="mister-topbar">
+    <div class="topbar-left">
+      <a href="#ajuda" class="topbar-help-link" id="btnHelp">
+        <span class="help-circle">?</span> Precisa de ajuda?
+      </a>
+      <div class="topbar-connection-tag" id="topbarConnectionTag">
+        <span class="connection-status-dot disconnected" id="topbarStatusDot"></span>
+        <span id="topbarStatusText">Desconectado (Pluggy API)</span>
       </div>
+    </div>
 
-      <div class="header-actions">
-        <!-- Badge de Conector Ativo -->
-        <div class="connector-status-card" id="connectorCard">
-          <div class="status-indicator-dot"></div>
-          <div class="connector-details">
-            <span class="connector-name" id="connectorName">Pluggy Bank (Sandbox)</span>
-            <span class="connector-item-id" id="connectorItemId">Item: mock-sandbox-item-001</span>
-          </div>
-        </div>
-
-        <!-- Seletor de Período -->
-        <div class="date-filter-wrapper">
-          <button type="button" class="btn-control" id="periodBtn" title="Filtrar por Mês ou Data">
-            <span class="icon">📅</span>
-            <span id="periodBtnText">Agosto de 2026 (M-1)</span>
-            <span class="chevron">▼</span>
-          </button>
-
-          <!-- Popover de Período -->
-          <div class="date-filter-popover" id="dateFilterPopover" style="display: none;">
-            <div class="popover-header">
-              <strong>Selecionar Período</strong>
-              <button type="button" class="btn-close-popover" id="closeDatePopoverBtn">✕</button>
-            </div>
-            <div class="popover-presets">
-              <span class="popover-label">Atalhos rápidos:</span>
-              <div class="preset-grid">
-                <button type="button" class="preset-btn active" data-preset="m-1">M-1 Fechado (Agosto/2026)</button>
-                <button type="button" class="preset-btn" data-preset="current">Mês Atual (Setembro/2026)</button>
-                <button type="button" class="preset-btn" data-preset="m-2">Julho/2026 (M-2)</button>
-                <button type="button" class="preset-btn" data-preset="m-3">Junho/2026 (M-3)</button>
-              </div>
-            </div>
-            <div class="popover-custom">
-              <span class="popover-label">Intervalo personalizado:</span>
-              <div class="custom-range-inputs">
-                <div>
-                  <label for="filterDateFrom">De:</label>
-                  <input type="date" id="filterDateFrom" value="2026-08-01">
-                </div>
-                <div>
-                  <label for="filterDateTo">Até:</label>
-                  <input type="date" id="filterDateTo" value="2026-08-31">
-                </div>
-              </div>
-            </div>
-            <div class="popover-footer">
-              <button type="button" class="btn-primary-sm" id="applyDateFilterBtn">Aplicar Filtro</button>
-              <button type="button" class="btn-secondary-sm" id="resetDateFilterBtn">Restaurar M-1</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Botão Conectar com Widget -->
-        <button type="button" class="btn-connect" id="reopenPluggyBtn">
-          <span>🔌</span> Conectar Conta
-        </button>
-
-        <!-- Botão Ver JSON -->
-        <a href="/api/last-data" target="_blank" class="btn-control" title="Abrir JSON bruto da API em nova aba">
-          <span>📄</span> JSON Bruto
-        </a>
+    <div class="topbar-right">
+      <span class="empresa-label">Empresa:</span>
+      <div class="empresa-pill" id="empresaPillName" title="Razão Social da Empresa">
+        EMPRESA TESTE MISTER CONTADOR LTDA
+      </div>
+      <div class="cnpj-pill" id="cnpjPill" title="CNPJ da Empresa">
+        00000000000191
       </div>
     </div>
   </header>
 
-  <!-- Conteúdo Central -->
-  <main class="main-container">
-    <!-- Banner de Período Ativo -->
-    <div class="period-info-banner">
-      <div class="banner-left">
-        <span class="banner-icon">ℹ️</span>
-        <span class="banner-text">
-          Exibindo dados financeiros referentes a <strong id="bannerPeriodLabel">Agosto de 2026</strong> (<span id="bannerPeriodRange">01/08/2026 até 31/08/2026</span>) • <em>Padrão contábil de mês fechado (M-1)</em>
-        </span>
-      </div>
-      <div class="banner-right">
-        <span class="last-sync-text" id="lastSyncText">Sincronizado via Pluggy API</span>
-      </div>
-    </div>
-
-    <!-- Cards de Métricas Principais (KPIs) -->
-    <section class="kpi-grid">
-      <!-- KPI 1: Cartão de Crédito -->
-      <div class="kpi-card" data-target-tab="card">
-        <div class="kpi-header">
-          <span class="kpi-title">Fatura Cartão (Período)</span>
-          <span class="kpi-icon icon-card">💳</span>
+  <!-- Layout Principal com Sidebar Lateral Esquerda e Área Central -->
+  <div class="mister-app-body">
+    <!-- Navbar Lateral Esquerdo -->
+    <aside class="mister-sidebar">
+      <div class="sidebar-user-header">
+        <div class="user-avatar-circle">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
         </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value" id="kpiCardSpend">R$ 0,00</span>
-          <span class="kpi-badge badge-warning" id="kpiCardTxCount">0 transações</span>
+        <div class="user-info-text">
+          <span class="user-greeting">Olá,</span>
+          <strong class="user-name">administrador</strong>
         </div>
-        <div class="kpi-footer">
-          <span>Limite disponível: <strong id="kpiCardLimitAvailable">R$ 0,00</strong></span>
-          <span class="kpi-limit-total" id="kpiCardLimitTotal">de R$ 0,00</span>
-        </div>
+        <button type="button" class="sidebar-menu-btn" title="Menu">☰</button>
       </div>
 
-      <!-- KPI 2: Investimentos -->
-      <div class="kpi-card" data-target-tab="investments">
-        <div class="kpi-header">
-          <span class="kpi-title">Patrimônio em Investimentos</span>
-          <span class="kpi-icon icon-invest">📈</span>
-        </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value text-success" id="kpiInvestTotal">R$ 0,00</span>
-          <span class="kpi-badge badge-success" id="kpiInvestCount">0 aplicações</span>
-        </div>
-        <div class="kpi-footer">
-          <span>Rentabilidade predominante: <strong id="kpiInvestRate">100% CDI</strong></span>
-        </div>
-      </div>
-
-      <!-- KPI 3: Empréstimos -->
-      <div class="kpi-card" data-target-tab="loans">
-        <div class="kpi-header">
-          <span class="kpi-title">Saldo Devedor de Empréstimos</span>
-          <span class="kpi-icon icon-loan">📑</span>
-        </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value text-danger" id="kpiLoanOutstanding">R$ 0,00</span>
-          <span class="kpi-badge badge-neutral" id="kpiLoanContract">Open Finance</span>
-        </div>
-        <div class="kpi-footer">
-          <span>Próxima parcela: <strong id="kpiLoanInstallment">R$ 0,00</strong></span>
-          <span class="kpi-rate-tag" id="kpiLoanRate">1.89% a.m.</span>
-        </div>
-      </div>
-
-      <!-- KPI 4: Conta Corrente -->
-      <div class="kpi-card" data-target-tab="checking">
-        <div class="kpi-header">
-          <span class="kpi-title">Saldo em Conta Corrente</span>
-          <span class="kpi-icon icon-bank">🏦</span>
-        </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value" id="kpiBankBalance">R$ 0,00</span>
-          <span class="kpi-badge badge-info" id="kpiBankTxCount">0 movim.</span>
-        </div>
-        <div class="kpi-footer">
-          <span id="kpiBankTransferNumber">Ag/Conta: 123/0001/12345-0</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Barra de Navegação por Categorias (Tabs) -->
-    <section class="category-tabs-bar">
-      <div class="tabs-list">
-        <button type="button" class="tab-btn active" data-tab="overview">
-          <span>📊</span> Visão Geral
+      <!-- Links das Novas Funcionalidades Solicitadas -->
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-item" data-view="inicio">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-text">Início</span>
         </button>
-        <button type="button" class="tab-btn" data-tab="card">
-          <span>💳</span> Cartão de Crédito <span class="tab-count-badge" id="tabCardBadge">0</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="investments">
-          <span>📈</span> Investimentos & Aplicações <span class="tab-count-badge" id="tabInvestBadge">0</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="loans">
-          <span>📑</span> Empréstimos & Financiamentos <span class="tab-count-badge" id="tabLoanBadge">0</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="checking">
-          <span>🏦</span> Conta Corrente & Extrato <span class="tab-count-badge" id="tabCheckingBadge">0</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="json-inspector">
-          <span>🔍</span> JSON Inspector
-        </button>
-      </div>
 
-      <div class="tab-actions">
-        <div class="search-input-wrapper" id="searchWrapper">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" placeholder="Pesquisar lançamentos, ativos...">
+        <button type="button" class="nav-item" data-view="registro">
+          <span class="nav-icon">📑</span>
+          <span class="nav-text">Registro Contábil</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="extrato">
+          <span class="nav-icon">🏦</span>
+          <span class="nav-text">Extrato</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="cartao">
+          <span class="nav-icon">💳</span>
+          <span class="nav-text">Cartão de Crédito</span>
+        </button>
+
+        <button type="button" class="nav-item active" data-view="comprovantes">
+          <span class="nav-icon">🧾</span>
+          <span class="nav-text">Comprovantes</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="investimentos">
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">Investimentos</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="emprestimos">
+          <span class="nav-icon">🤝</span>
+          <span class="nav-text">Empréstimos</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="estatisticas">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Estatísticas</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="empresa">
+          <span class="nav-icon">🏢</span>
+          <span class="nav-text">Empresa</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="permissoes">
+          <span class="nav-icon">🔒</span>
+          <span class="nav-text">Permissões</span>
+        </button>
+      </nav>
+
+      <!-- Rodapé da Sidebar: Marca Mister Contador -->
+      <div class="sidebar-footer">
+        <div class="mister-brand">
+          <div class="mister-brand-icon">
+            <span>M</span>
+          </div>
+          <span class="mister-brand-name">Mister</span>
         </div>
+        <span class="mister-version">v.8.29.2</span>
       </div>
-    </section>
+    </aside>
 
-    <!-- Área de Conteúdo da Aba Ativa -->
-    <section class="tab-content-area" id="tabContentArea">
-      <!-- O conteúdo é injetado dinamicamente via JavaScript -->
-    </section>
-  </main>
+    <!-- Área de Conteúdo da Tela Selecionada -->
+    <main class="mister-main-content">
+      <!-- Barra Superior de Controle e Filtros Mister Contador -->
+      <section class="mister-control-header" id="misterControlHeader">
+        <h1 class="view-heading-title" id="viewHeadingTitle">Comprovantes</h1>
+
+        <div class="mister-filters-bar">
+          <!-- Botão Azul Filtros ▼ -->
+          <div class="filter-actions-group">
+            <button type="button" class="btn-mister-filter" id="btnFilterToggle">
+              <span class="filter-icon">🔍</span>
+              <span>Filtros</span>
+              <span class="chevron">▼</span>
+            </button>
+
+            <!-- Seletor de Período M-1 -->
+            <div class="date-filter-wrapper">
+              <button type="button" class="btn-mister-date" id="periodBtn">
+                <span id="periodBtnText">agosto de 2026</span>
+                <span class="calendar-icon">📅</span>
+              </button>
+
+              <!-- Popover Interativo de Período -->
+              <div class="date-filter-popover" id="dateFilterPopover" style="display: none;">
+                <div class="popover-header">
+                  <strong>Selecionar Período</strong>
+                  <button type="button" class="btn-close-popover" id="closeDatePopoverBtn">✕</button>
+                </div>
+                <div class="popover-presets">
+                  <span class="popover-label">Atalhos rápidos:</span>
+                  <div class="preset-grid">
+                    <button type="button" class="preset-btn active" data-preset="m-1">M-1 Fechado (Agosto/2026)</button>
+                    <button type="button" class="preset-btn" data-preset="current">Mês Atual (Setembro/2026)</button>
+                    <button type="button" class="preset-btn" data-preset="m-2">Julho/2026 (M-2)</button>
+                    <button type="button" class="preset-btn" data-preset="m-3">Junho/2026 (M-3)</button>
+                  </div>
+                </div>
+                <div class="popover-custom">
+                  <span class="popover-label">Intervalo personalizado:</span>
+                  <div class="custom-range-inputs">
+                    <div>
+                      <label for="filterDateFrom">De:</label>
+                      <input type="date" id="filterDateFrom" value="2026-08-01">
+                    </div>
+                    <div>
+                      <label for="filterDateTo">Até:</label>
+                      <input type="date" id="filterDateTo" value="2026-08-31">
+                    </div>
+                  </div>
+                </div>
+                <div class="popover-footer">
+                  <button type="button" class="btn-primary-sm" id="applyDateFilterBtn">Aplicar</button>
+                  <button type="button" class="btn-secondary-sm" id="resetDateFilterBtn">Restaurar M-1</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dropdown Tipo/Categoria -->
+            <select class="mister-dropdown" id="subTypeSelect">
+              <option value="all">Todos</option>
+              <option value="debit">Apenas Débitos</option>
+              <option value="credit">Apenas Créditos</option>
+              <option value="pix">Pagamentos PIX</option>
+              <option value="boleto">Boletos</option>
+            </select>
+
+            <!-- Seletor de Conta -->
+            <div class="account-select-pill">
+              <span class="book-icon">📗</span>
+              <select class="mister-account-dropdown" id="accountSelect">
+                <option value="all">1/465155 - Pluggy Bank (Conta PJ)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Botões da Direita: Relatório e Carregar / Conectar -->
+          <div class="filter-right-actions">
+            <button type="button" class="btn-mister-action" id="btnReport">
+              <span>Relatório</span>
+              <span class="cloud-icon">☁</span>
+            </button>
+
+            <button type="button" class="btn-mister-action btn-mister-cloud" id="reopenPluggyBtn">
+              <span id="btnConnectLabel">Carregar</span>
+              <span class="cloud-icon">☁</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Badge Centralizado Lançamentos [ X ] -->
+        <div class="mister-txs-badge-row">
+          <div class="mister-txs-badge">
+            <span>Lançamentos</span>
+            <span class="mister-badge-number" id="headerTxCount">0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Container da View Ativa -->
+      <section class="mister-view-container" id="viewContainer">
+        <!-- Injetado dinamicamente via app.js -->
+      </section>
+    </main>
+  </div>
+
+  <!-- Botão Flutuante Central Mister no Canto Inferior Direito -->
+  <button type="button" class="floating-central-mister" id="btnCentralMister" title="Central Mister">
+    <div class="central-m-logo">M</div>
+    <span>Central Mister</span>
+  </button>
 
   <!-- Modal do Pluggy Connect Widget Overlay -->
   <div class="connect-overlay" id="connectOverlay" style="display: none;">
@@ -222,7 +236,7 @@
           <div class="modal-icon">🔌</div>
           <div>
             <h2 class="modal-title">Conectar com Pluggy Open Finance</h2>
-            <p class="modal-desc">Conecte sua conta do Sandbox ou de produção para visualizar os dados reais</p>
+            <p class="modal-desc">Conecte sua conta para buscar os dados reais direto da API</p>
           </div>
         </div>
         <button type="button" class="modal-close-btn" id="closeOverlayBtn">✕</button>
@@ -232,11 +246,11 @@
         <div class="sandbox-instructions-box">
           <h4>🧪 Como conectar no ambiente Sandbox:</h4>
           <ul>
-            <li>No widget da Pluggy que abrirá, selecione o conector <strong>Pluggy Bank (Sandbox)</strong>.</li>
+            <li>No widget da Pluggy que abrirá, selecione <strong>Pluggy Bank (Sandbox)</strong>.</li>
             <li>Insira as credenciais de teste:
               <span class="code-pill">user-ok</span> e <span class="code-pill">password-ok</span>
             </li>
-            <li>Aguarde o widget finalizar a sincronização. A tela atualizará instantaneamente com os dados reais retornados.</li>
+            <li>Ao concluir com sucesso, todas as abas do Mister Contador serão sincronizadas com os dados reais.</li>
           </ul>
         </div>
 
@@ -259,7 +273,7 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn-cancel" id="btnCancelConnect">Visualizar Dados Simulados (/simulado)</button>
+        <button type="button" class="btn-cancel" id="btnCancelConnect">Fechar</button>
         <button type="button" class="btn-start" id="startWidgetBtn">Abrir Pluggy Connect</button>
       </div>
     </div>

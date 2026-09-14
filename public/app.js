@@ -1,27 +1,30 @@
 /**
- * Pluggy Open Finance — Data Explorer Controller
- * Visualização limpa, analítica e categorizada de todos os dados retornados pela API
+ * Mister Contador — Open Finance Pluggy Integration Controller
+ * Visualização e gestão completa com suporte às novas funcionalidades:
+ * Início, Registro Contábil, Extrato, Cartão de Crédito, Comprovantes, Estatísticas, Empresa e Permissões.
+ * DADOS REAIS VIA PLUGGY API (SEM MOCKS AUTOMÁTICOS).
  */
 
 const state = {
-  activeData: null,
-  activeTab: 'overview', // 'overview' | 'card' | 'investments' | 'loans' | 'checking' | 'json-inspector'
-  jsonSubTab: 'all',
-  searchQuery: '',
-  config: null,
+  currentView: 'comprovantes', // 'inicio' | 'registro' | 'extrato' | 'cartao' | 'comprovantes' | 'estatisticas' | 'empresa' | 'permissoes'
+  activeData: null,            // Nulo até que haja conexão real com o widget
   connectedItemId: null,
+  config: null,
+  subTypeFilter: 'all',
+  jsonSubTab: 'all',
   currentFilter: {
     from: '2026-08-01',
     to: '2026-08-31',
-    label: 'Agosto de 2026 (M-1)'
-  }
+    label: 'agosto de 2026'
+  },
+  currentAccount: 'all'
 };
 
-// Disponibiliza no escopo global para inspeção no console do navegador (F12)
-window.state = state;
-window.getPluggyJson = () => state.activeData;
+// Disponibiliza no escopo global para depuração
+window.misterState = state;
+window.getPluggyData = () => state.activeData;
 
-// --- Formatadores ---
+// --- Formatadores Úteis ---
 function formatMoney(amount) {
   if (amount === null || amount === undefined || isNaN(amount)) return 'R$ 0,00';
   const num = Number(amount);
@@ -38,24 +41,20 @@ function formatDate(dateStr) {
   }
 }
 
-function getCategoryClass(category = '') {
-  const cat = category.toLowerCase();
-  if (cat.includes('streaming') || cat.includes('serviço')) return 'category-streaming';
-  if (cat.includes('transporte') || cat.includes('mobilidade') || cat.includes('combustível')) return 'category-transport';
-  if (cat.includes('alimentação') || cat.includes('refeição') || cat.includes('restaurante')) return 'category-food';
-  if (cat.includes('compra') || cat.includes('suprimento') || cat.includes('mercado')) return 'category-shopping';
-  if (cat.includes('saúde') || cat.includes('farmácia') || cat.includes('medicamento')) return 'category-health';
-  if (cat.includes('salário') || cat.includes('provento')) return 'category-salary';
-  if (cat.includes('moradia') || cat.includes('conta') || cat.includes('condomínio')) return 'category-housing';
-  return '';
+function escapeHtml(string) {
+  return String(string)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-// --- Inicialização ---
+// --- Inicialização da Aplicação ---
 async function init() {
   setupEventListeners();
 
   try {
-    // 1. Consulta configuração do backend (período padrão M-1)
     const configRes = await fetch('/api/config');
     state.config = await configRes.json();
 
@@ -63,60 +62,48 @@ async function init() {
       state.currentFilter = {
         from: state.config.period.from,
         to: state.config.period.to,
-        label: `${state.config.period.label} (M-1)`
+        label: state.config.period.label.toLowerCase()
       };
       updatePeriodUI();
     }
-
-    // 2. Roteamento: /simulado vs /
-    const isSimulado = window.location.pathname.startsWith('/simulado');
-
-    if (isSimulado) {
-      document.getElementById('connectOverlay').style.display = 'none';
-      await loadData();
-    } else {
-      document.getElementById('connectOverlay').style.display = 'flex';
-      if (state.config.hasEnvKeys) {
-        document.getElementById('credentialsPrompt').style.display = 'none';
-      } else {
-        document.getElementById('credentialsPrompt').style.display = 'block';
-      }
-      await loadData(); // carrega em background para a tela não ficar vazia
-    }
   } catch (err) {
-    console.error('Erro na inicialização:', err);
-    await loadData();
+    console.warn('Configuração de período offline, utilizando padrão M-1:', err);
+  }
+
+  // Restaura sessão conectada caso o usuário já tenha conectado via widget
+  const savedItemId = localStorage.getItem('pluggy_connected_item_id');
+  if (savedItemId) {
+    state.connectedItemId = savedItemId;
+    await fetchItemData(savedItemId);
+  } else {
+    switchView('comprovantes');
   }
 }
 
-// Configura listeners de eventos da interface
+// --- Configuração dos Listeners da Interface ---
 function setupEventListeners() {
-  // Navegação entre Abas (Tabs)
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const tab = btn.dataset.tab;
-      switchTab(tab);
+  // Navegação pelos itens do Navbar Lateral
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      if (view) switchView(view);
     });
   });
 
-  // Clique nos Cards de KPI direciona para a respectiva aba
-  document.querySelectorAll('.kpi-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const targetTab = card.dataset.targetTab;
-      if (targetTab) switchTab(targetTab);
-    });
+  // Botão Carregar / Conectar no Header
+  document.getElementById('reopenPluggyBtn')?.addEventListener('click', () => {
+    launchPluggyWidget();
   });
 
-  // Campo de Busca
-  const searchInput = document.getElementById('searchInput');
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      state.searchQuery = e.target.value.toLowerCase().trim();
-      renderTabContent();
-    });
-  }
+  // Botão Filtros ▼ (recarrega a visualização ou alterna popover)
+  document.getElementById('btnFilterToggle')?.addEventListener('click', () => {
+    const popover = document.getElementById('dateFilterPopover');
+    if (popover) {
+      popover.style.display = popover.style.display === 'none' ? 'block' : 'none';
+    }
+  });
 
-  // Popover de Filtro de Período
+  // Seletor de Período
   const periodBtn = document.getElementById('periodBtn');
   const datePopover = document.getElementById('dateFilterPopover');
   const closePopoverBtn = document.getElementById('closeDatePopoverBtn');
@@ -147,13 +134,13 @@ function setupEventListeners() {
       let from, to, label;
 
       if (preset === 'm-1') {
-        from = '2026-08-01'; to = '2026-08-31'; label = 'Agosto de 2026 (M-1)';
+        from = '2026-08-01'; to = '2026-08-31'; label = 'agosto de 2026';
       } else if (preset === 'current') {
-        from = '2026-09-01'; to = '2026-09-30'; label = 'Setembro de 2026 (Mês Atual)';
+        from = '2026-09-01'; to = '2026-09-30'; label = 'setembro de 2026';
       } else if (preset === 'm-2') {
-        from = '2026-07-01'; to = '2026-07-31'; label = 'Julho de 2026 (M-2)';
+        from = '2026-07-01'; to = '2026-07-31'; label = 'julho de 2026';
       } else if (preset === 'm-3') {
-        from = '2026-06-01'; to = '2026-06-30'; label = 'Junho de 2026 (M-3)';
+        from = '2026-06-01'; to = '2026-06-30'; label = 'junho de 2026';
       }
 
       document.getElementById('filterDateFrom').value = from;
@@ -162,20 +149,14 @@ function setupEventListeners() {
     });
   });
 
-  // Aplicar Intervalo Customizado
+  // Aplicar Intervalo Personalizado
   document.getElementById('applyDateFilterBtn')?.addEventListener('click', () => {
     const from = document.getElementById('filterDateFrom').value;
     const to = document.getElementById('filterDateTo').value;
-
-    if (!from || !to) {
-      alert('Informe as datas inicial e final.');
+    if (!from || !to || from > to) {
+      alert('Selecione um intervalo de datas válido.');
       return;
     }
-    if (from > to) {
-      alert('A data inicial não pode ser superior à final.');
-      return;
-    }
-
     presetButtons.forEach(b => b.classList.remove('active'));
     const label = `${formatDate(from)} até ${formatDate(to)}`;
     reloadWithFilter(from, to, label);
@@ -185,58 +166,46 @@ function setupEventListeners() {
   document.getElementById('resetDateFilterBtn')?.addEventListener('click', () => {
     presetButtons.forEach(b => b.classList.remove('active'));
     document.querySelector('.preset-btn[data-preset="m-1"]')?.classList.add('active');
-    const from = '2026-08-01';
-    const to = '2026-08-31';
-    const label = 'Agosto de 2026 (M-1)';
-    document.getElementById('filterDateFrom').value = from;
-    document.getElementById('filterDateTo').value = to;
-    reloadWithFilter(from, to, label);
+    reloadWithFilter('2026-08-01', '2026-08-31', 'agosto de 2026');
   });
 
-  // Botão Reabrir Widget Pluggy
-  document.getElementById('reopenPluggyBtn')?.addEventListener('click', () => {
-    document.getElementById('connectOverlay').style.display = 'flex';
+  // Filtro de Subtipo (Todos, Débitos, Créditos, PIX, Boleto)
+  document.getElementById('subTypeSelect')?.addEventListener('change', (e) => {
+    state.subTypeFilter = e.target.value;
+    renderCurrentView();
   });
 
-  // Fechar Modal
+  // Filtro de Conta
+  document.getElementById('accountSelect')?.addEventListener('change', (e) => {
+    state.currentAccount = e.target.value;
+    renderCurrentView();
+  });
+
+  // Botão Flutuante Central Mister
+  document.getElementById('btnCentralMister')?.addEventListener('click', () => {
+    alert('Central Mister Contador — Suporte contábil & Open Finance integrado via Pluggy API.');
+  });
+
+  // Botão Relatório
+  document.getElementById('btnReport')?.addEventListener('click', () => {
+    window.print();
+  });
+
+  // Fechar Modal Connect
   document.getElementById('closeOverlayBtn')?.addEventListener('click', () => {
     document.getElementById('connectOverlay').style.display = 'none';
   });
-
   document.getElementById('btnCancelConnect')?.addEventListener('click', () => {
     document.getElementById('connectOverlay').style.display = 'none';
   });
-
-  // Disparo do Widget
   document.getElementById('startWidgetBtn')?.addEventListener('click', launchPluggyWidget);
 }
 
-// Troca de Aba
-function switchTab(tabName) {
-  state.activeTab = tabName;
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
-  });
-
-  // Exibe/oculta a barra de busca dependendo da aba
-  const searchWrapper = document.getElementById('searchWrapper');
-  if (searchWrapper) {
-    searchWrapper.style.display = tabName === 'json-inspector' ? 'none' : 'block';
-  }
-
-  renderTabContent();
-}
-
-// Atualiza Textos do Período no Header e no Banner
+// Atualiza Textos do Período no Header
 function updatePeriodUI() {
   const f = state.currentFilter;
   const periodBtnText = document.getElementById('periodBtnText');
-  const bannerPeriodLabel = document.getElementById('bannerPeriodLabel');
-  const bannerPeriodRange = document.getElementById('bannerPeriodRange');
-
   if (periodBtnText) periodBtnText.textContent = f.label;
-  if (bannerPeriodLabel) bannerPeriodLabel.textContent = f.label;
-  if (bannerPeriodRange) bannerPeriodRange.textContent = `${formatDate(f.from)} até ${formatDate(f.to)}`;
 }
 
 // Recarrega os dados com as datas filtradas
@@ -244,35 +213,873 @@ async function reloadWithFilter(from, to, label) {
   state.currentFilter = { from, to, label };
   updatePeriodUI();
   document.getElementById('dateFilterPopover').style.display = 'none';
-  await loadData();
-}
 
-// Carrega os dados da API (Item real ou dados simulados)
-async function loadData() {
-  const f = state.currentFilter;
-  try {
-    let url = state.connectedItemId
-      ? `/api/item-data?itemId=${state.connectedItemId}&from=${f.from}&to=${f.to}&label=${encodeURIComponent(f.label)}`
-      : `/api/mock-data?from=${f.from}&to=${f.to}&label=${encodeURIComponent(f.label)}`;
-
-    const res = await fetch(url);
-    state.activeData = await res.json();
-
-    console.log('📦 DADOS ATUALIZADOS:', state.activeData);
-    renderDashboard();
-  } catch (err) {
-    console.error('Erro ao carregar dados:', err);
+  if (state.connectedItemId) {
+    await fetchItemData(state.connectedItemId);
+  } else {
+    renderCurrentView();
   }
 }
 
-// Inicia o Pluggy Connect Widget
+// --- Roteamento entre Visões (Abas da Sidebar) ---
+function switchView(viewName) {
+  state.currentView = viewName;
+
+  // Atualiza classe ativa nos botões da Sidebar
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  // Atualiza título do cabeçalho de controle
+  const titleEl = document.getElementById('viewHeadingTitle');
+  const titles = {
+    inicio: 'Início',
+    registro: 'Registro Contábil',
+    extrato: 'Extrato Bancário',
+    cartao: 'Cartão de Crédito & Maquininha (Recebíveis)',
+    comprovantes: 'Comprovantes',
+    investimentos: 'Investimentos',
+    emprestimos: 'Empréstimos e Financiamentos',
+    estatisticas: 'Estatísticas (Dashboard)',
+    empresa: 'Empresa',
+    permissoes: 'Permissões & Gestão de Acesso'
+  };
+  if (titleEl) titleEl.textContent = titles[viewName] || viewName;
+
+  renderCurrentView();
+}
+
+// Renderiza a view selecionada
+function renderCurrentView() {
+  const container = document.getElementById('viewContainer');
+  if (!container) return;
+
+  updateHeaderTxCount();
+
+  switch (state.currentView) {
+    case 'inicio':
+      container.innerHTML = renderInicioViewHtml();
+      break;
+    case 'registro':
+      container.innerHTML = renderRegistroContabilHtml();
+      break;
+    case 'extrato':
+      container.innerHTML = renderExtratoHtml();
+      break;
+    case 'cartao':
+      container.innerHTML = renderCartaoHtml();
+      break;
+    case 'comprovantes':
+      container.innerHTML = renderComprovantesHtml();
+      break;
+    case 'investimentos':
+      container.innerHTML = renderInvestimentosHtml();
+      break;
+    case 'emprestimos':
+      container.innerHTML = renderEmprestimosHtml();
+      break;
+    case 'estatisticas':
+      container.innerHTML = renderEstatisticasDashboardHtml();
+      setupJsonInspectorEvents();
+      break;
+    case 'empresa':
+      container.innerHTML = renderEmpresaHtml();
+      break;
+    case 'permissoes':
+      container.innerHTML = renderPermissoesHtml();
+      break;
+    default:
+      container.innerHTML = renderComprovantesHtml();
+  }
+}
+
+// Atualiza contador de lançamentos no badge central do header
+function updateHeaderTxCount() {
+  const badge = document.getElementById('headerTxCount');
+  if (!badge) return;
+
+  if (!state.activeData) {
+    badge.textContent = '0';
+    return;
+  }
+
+  const allFiltered = getFilteredTransactions();
+  const chkCount = allFiltered.filter(t => state.activeData?.checkingTransactions?.some(ct => ct.id === t.id)).length;
+  const cardCount = allFiltered.filter(t => state.activeData?.cardStatements?.some(cs => cs.transactions?.some(ct => ct.id === t.id))).length;
+
+  if (state.currentView === 'comprovantes') {
+    badge.textContent = String(allFiltered.length);
+  } else if (state.currentView === 'registro') {
+    badge.textContent = `${(allFiltered.length) * 2}/${allFiltered.length}`;
+  } else if (state.currentView === 'extrato') {
+    badge.textContent = String(chkCount);
+  } else if (state.currentView === 'cartao') {
+    badge.textContent = String(cardCount);
+  } else {
+    badge.textContent = String(allFiltered.length);
+  }
+}
+
+// =========================================================
+// VIEW 1: COMPROVANTES (EXATAMENTE FIEL AO PRINT DO USUÁRIO)
+// Colunas: Dt Pgto | Cliente/Fornecedor | CPF/CNPJ | Doc | Dt Vcto | Vl Docto | Valor | Juros | Multa | Desconto | Observação
+// =========================================================
+function renderComprovantesHtml() {
+  const txs = getFilteredTransactions();
+
+  let rowsHtml = '';
+  if (txs.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="11" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">🧾</span>
+            <span>Nenhum Comprovante encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = txs.map(tx => {
+      const p = tx.paymentData || {};
+      const receiver = p.receiver || {};
+      const payer = p.payer || {};
+      const party = receiver.name || payer.name || tx.description || '—';
+      const docNumber = receiver.documentNumber?.value || payer.documentNumber?.value || '—';
+      const docCode = p.boletoMetadata?.digitableLine || tx.id.slice(0, 10);
+      const dueDate = formatDate(p.boletoMetadata?.dueDate || tx.date);
+      const payDate = formatDate(tx.date);
+      const isDebit = tx.type === 'DEBIT' || Number(tx.amount) < 0;
+      const amountFormatted = (isDebit ? '- ' : '+ ') + formatMoney(Math.abs(tx.amount));
+      const amountColor = isDebit ? 'color: var(--mister-debit-red);' : 'color: var(--mister-success-green);';
+
+      return `
+        <tr>
+          <td>${payDate}</td>
+          <td><strong>${escapeHtml(party)}</strong></td>
+          <td>${escapeHtml(docNumber)}</td>
+          <td><code style="font-size: 11px;">${escapeHtml(docCode)}</code></td>
+          <td>${dueDate}</td>
+          <td>${formatMoney(Math.abs(tx.amount))}</td>
+          <td style="${amountColor} font-weight: 600;">${amountFormatted}</td>
+          <td>R$ 0,00</td>
+          <td>R$ 0,00</td>
+          <td>R$ 0,00</td>
+          <td>${escapeHtml(tx.category || tx.description || '—')}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th><span class="sortable">Dt Pgto ⇅</span></th>
+            <th><span class="sortable">Cliente/Fornecedor ⇅</span></th>
+            <th><span>CPF/CNPJ</span></th>
+            <th><span>Doc</span></th>
+            <th><span class="sortable">Dt Vcto ⇅</span></th>
+            <th><span class="sortable">Vl Docto ⇅</span></th>
+            <th><span class="sortable">Valor ⇅</span></th>
+            <th><span>Juros</span></th>
+            <th><span>Multa</span></th>
+            <th><span>Desconto</span></th>
+            <th><span class="sortable">Observação ⇅</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 2: REGISTRO CONTÁBIL (PARTIDAS DOBRADAS DÉBITO / CRÉDITO)
+// =========================================================
+function renderRegistroContabilHtml() {
+  const txs = getFilteredTransactions();
+
+  let rowsHtml = '';
+  if (txs.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="10" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">📑</span>
+            <span>Nenhum Registro Contábil encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = txs.map((tx, idx) => {
+      const isDebit = tx.type === 'DEBIT' || Number(tx.amount) < 0;
+      const absAmount = formatMoney(Math.abs(tx.amount));
+      const dateStr = formatDate(tx.date);
+      const desc = escapeHtml(tx.description || 'Lançamento');
+
+      return `
+        <!-- Linha 1: Débito (Branca) -->
+        <tr class="debit-line">
+          <td>${dateStr}</td>
+          <td>1.1.1.01.0.00001</td>
+          <td>📘 5</td>
+          <td style="color: var(--mister-debit-red); font-weight: 600;">${absAmount}</td>
+          <td></td>
+          <td><a href="#detalhe" style="color: #0052cc; text-decoration: none;">${desc}</a></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Extrato Pluggy Open Finance</td>
+        </tr>
+        <!-- Linha 2: Crédito (Amarela #fffde7) -->
+        <tr class="credit-line">
+          <td></td>
+          <td></td>
+          <td>📘 5</td>
+          <td></td>
+          <td style="color: #111827; font-weight: 600;">${absAmount}</td>
+          <td>Contrapartida Contábil: ${desc}</td>
+          <td>✏️ Anexo</td>
+          <td>📎 NF</td>
+          <td>—</td>
+          <td>Partida Dobrada #${idx + 1}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Classificação</th>
+            <th>Conta</th>
+            <th>Débito</th>
+            <th>Crédito</th>
+            <th>Histórico</th>
+            <th>Comprovante</th>
+            <th>NF</th>
+            <th>Cliente/Fornecedor</th>
+            <th>Informação extra</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 3: EXTRATO BANCÁRIO
+// =========================================================
+function renderExtratoHtml() {
+  const allFiltered = getFilteredTransactions();
+  // Filtrar apenas as transações que têm conta do tipo BANK, que geralmente são de checkingTransactions
+  // Mas como a Pluggy pode não trazer category, nós podemos checar se veio de checkingTransactions
+  // Ou mais simples: checar se a transação está no array de checkingTransactions original.
+  const chkTxs = allFiltered.filter(t => state.activeData?.checkingTransactions?.some(ct => ct.id === t.id));
+
+  let rowsHtml = '';
+  if (chkTxs.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="7" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">🏦</span>
+            <span>Nenhum lançamento no extrato bancário encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = chkTxs.map(tx => {
+      const isDebit = tx.type === 'DEBIT' || Number(tx.amount) < 0;
+      const method = tx.paymentData?.paymentMethod || (tx.description?.includes('PIX') ? 'PIX' : (tx.description?.includes('TED') ? 'TED' : 'OUTROS'));
+      const amountColor = isDebit ? 'color: var(--mister-debit-red);' : 'color: var(--mister-success-green);';
+      const formatted = (isDebit ? '- ' : '+ ') + formatMoney(Math.abs(tx.amount));
+      const party = tx.paymentData?.receiver?.name || tx.paymentData?.payer?.name || '—';
+
+      return `
+        <tr>
+          <td>${formatDate(tx.date)}</td>
+          <td><strong>${escapeHtml(tx.description)}</strong></td>
+          <td><span style="background: #f1f5f9; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px;">${method}</span></td>
+          <td style="${amountColor} font-weight: 600;">${formatted}</td>
+          <td>${escapeHtml(tx.category || 'Geral')}</td>
+          <td>${escapeHtml(party)}</td>
+          <td><code style="font-size: 11px;">${tx.id.slice(0, 10)}</code></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Descrição da Movimentação</th>
+            <th>Método</th>
+            <th>Valor</th>
+            <th>Categoria</th>
+            <th>Favorecido / Pagador</th>
+            <th>ID da Transação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 4: CARTÃO DE CRÉDITO & RECEBÍVEIS (MAQUININHA)
+// =========================================================
+function renderCartaoHtml() {
+  const allFiltered = getFilteredTransactions();
+  // Filtrar apenas as transações de cartão de crédito originais
+  const cardTxs = allFiltered.filter(t => state.activeData?.cardStatements?.some(cs => cs.transactions?.some(ct => ct.id === t.id)));
+
+  let rowsHtml = '';
+  if (cardTxs.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="7" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">💳</span>
+            <span>Nenhum lançamento de cartão de crédito ou recebíveis encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = cardTxs.map(tx => {
+      const meta = tx.creditCardMetadata || {};
+      const installment = meta.installmentNumber ? `${meta.installmentNumber}/${meta.totalInstallments || 1}` : 'À Vista';
+      const isDebit = tx.type === 'DEBIT' || Number(tx.amount) < 0;
+      const formatted = (isDebit ? '- ' : '+ ') + formatMoney(Math.abs(tx.amount));
+      const typeLabel = isDebit ? 'Compra Cartão' : 'Recebível / Estorno';
+
+      return `
+        <tr>
+          <td>${formatDate(tx.date)}</td>
+          <td><strong>${escapeHtml(tx.description)}</strong></td>
+          <td><span style="background: #e8f0fe; color: #002b80; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px;">${typeLabel}</span></td>
+          <td><span style="background: #e2e8f0; padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 10.5px;">${installment}</span></td>
+          <td>${escapeHtml(tx.category || 'Geral')}</td>
+          <td style="color: var(--mister-debit-red); font-weight: 600;">${formatted}</td>
+          <td><code style="font-size: 11px;">${tx.id.slice(0, 10)}</code></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th>Data da Compra</th>
+            <th>Descrição / Estabelecimento</th>
+            <th>Tipo do Lançamento</th>
+            <th>Parcela</th>
+            <th>Categoria</th>
+            <th>Valor</th>
+            <th>ID Transação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 5: INVESTIMENTOS
+// =========================================================
+function renderInvestimentosHtml() {
+  const investments = state.activeData?.investments || [];
+
+  let rowsHtml = '';
+  if (investments.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="6" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">📈</span>
+            <span>Nenhum investimento encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = investments.map(inv => {
+      return `
+        <tr>
+          <td><strong>${escapeHtml(inv.name)}</strong></td>
+          <td><span style="background: #e8f0fe; color: #002b80; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px;">${escapeHtml(inv.type)}</span></td>
+          <td>${inv.subtype ? escapeHtml(inv.subtype) : '—'}</td>
+          <td style="color: var(--mister-success-green); font-weight: 600;">${formatMoney(inv.balance || inv.value)}</td>
+          <td>${inv.annualRate ? `${inv.annualRate}% ${inv.rateType || ''}` : '—'}</td>
+          <td>${formatDate(inv.dueDate) || '—'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th>Nome do Ativo</th>
+            <th>Tipo</th>
+            <th>Subtipo</th>
+            <th>Saldo / Valor</th>
+            <th>Rentabilidade</th>
+            <th>Vencimento</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 6: EMPRÉSTIMOS
+// =========================================================
+function renderEmprestimosHtml() {
+  const loans = state.activeData?.loans || [];
+
+  let rowsHtml = '';
+  if (loans.length === 0) {
+    rowsHtml = `
+      <tr>
+        <td colspan="7" class="mister-empty-state-row">
+          <div class="empty-table-box">
+            <span class="empty-table-icon">🤝</span>
+            <span>Nenhum empréstimo ou financiamento encontrado</span>
+            ${!state.connectedItemId ? '<button type="button" class="btn-table-connect" onclick="window.launchPluggyWidget()">🔌 Conectar Conta com Pluggy</button>' : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    rowsHtml = loans.map(loan => {
+      return `
+        <tr>
+          <td><strong>${escapeHtml(loan.contractNumber || loan.id.slice(0,10))}</strong></td>
+          <td><span style="background: #fef08a; color: #854d0e; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px;">${escapeHtml(loan.type)}</span></td>
+          <td>${formatMoney(loan.contractAmount)}</td>
+          <td style="color: var(--mister-debit-red); font-weight: 600;">${formatMoney(loan.outstandingBalance)}</td>
+          <td>${loan.interestRate ? `${loan.interestRate}% ${loan.interestRateType || ''}` : '—'}</td>
+          <td>${loan.installmentsRemaining || 0} de ${loan.installmentsTotal || 0} restantes</td>
+          <td>${formatDate(loan.dueDate) || '—'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  return `
+    <div class="mister-table-card">
+      <table class="mister-table">
+        <thead>
+          <tr>
+            <th>Contrato</th>
+            <th>Tipo</th>
+            <th>Valor Contratado</th>
+            <th>Saldo Devedor</th>
+            <th>Taxa de Juros</th>
+            <th>Parcelas</th>
+            <th>Vencimento</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 7: ESTATÍSTICAS (DASHBOARD ANALÍTICO + JSON INSPECTOR)
+// =========================================================
+function renderEstatisticasDashboardHtml() {
+  const data = state.activeData;
+
+  // Se não houver dados, exibe os KPIs zerados e mensagem no JSON Inspector
+  const cardTxs = data?.cardStatements?.flatMap(cs => cs.transactions || []) || [];
+  
+  // Aggregate total available credit limit and spend across all cards
+  let availableCreditLimit = 0;
+  let cardSpend = 0;
+
+  if (data?.cardStatements) {
+    data.cardStatements.forEach(cs => {
+      availableCreditLimit += (cs.account?.creditData?.availableCreditLimit || 0);
+      cs.transactions?.forEach(tx => {
+        if (tx.type === 'DEBIT' || Number(tx.amount) < 0) {
+          cardSpend += Math.abs(Number(tx.amount));
+        }
+      });
+    });
+  }
+
+  const investments = data?.investments || [];
+  const investTotal = investments.reduce((sum, i) => sum + (Number(i.balance || i.value) || 0), 0);
+
+  const loans = data?.loans || [];
+  const loanDebt = loans.reduce((sum, l) => sum + (Number(l.outstandingBalance) || 0), 0);
+
+  const checkingAcc = data?.accounts?.find(a => a.type === 'BANK') || {};
+  const bankBalance = checkingAcc.balance || 0;
+
+  // JSON a exibir no inspector
+  let displayJson = data;
+  if (data) {
+    if (state.jsonSubTab === 'card') displayJson = data.cardStatements || [];
+    else if (state.jsonSubTab === 'investments') displayJson = data.investments || [];
+    else if (state.jsonSubTab === 'loans') displayJson = data.loans || [];
+    else if (state.jsonSubTab === 'checking') displayJson = data.checkingTransactions || [];
+    else if (state.jsonSubTab === 'item') displayJson = data.item || {};
+  } else {
+    displayJson = {
+      status: 'AGUARDANDO_CONEXAO',
+      mensagem: 'Conecte sua conta via Pluggy Connect Widget para inspecionar os dados reais da API.'
+    };
+  }
+
+  const jsonString = JSON.stringify(displayJson, null, 2);
+
+  return `
+    <div class="stats-dashboard-view">
+      <!-- Banner de Status da Sincronização -->
+      <div class="stats-sync-banner">
+        <div>
+          <strong>Status da Sincronização Open Finance:</strong>
+          <span>${data ? '🟢 Dados consolidados em tempo real via Pluggy API' : '⚪ Aguardando autenticação da conta bancária'}</span>
+        </div>
+        <button type="button" class="btn-mister-action" onclick="window.launchPluggyWidget()">
+          <span>${data ? 'Sincronizar Novamente' : 'Conectar Agora'}</span>
+          <span>🔌</span>
+        </button>
+      </div>
+
+      <!-- 4 Cards de Métricas Principais (KPIs) -->
+      <div class="stats-kpi-grid">
+        <!-- KPI 1: Cartão de Crédito -->
+        <div class="stats-kpi-card">
+          <div class="stats-kpi-title-row">
+            <span>Fatura Cartão (M-1)</span>
+            <span>💳</span>
+          </div>
+          <div class="stats-kpi-value">${formatMoney(cardSpend)}</div>
+          <div class="stats-kpi-footer">
+            <span>${cardTxs.length} transações</span>
+            <span>Limite disp: ${formatMoney(availableCreditLimit)}</span>
+          </div>
+        </div>
+
+        <!-- KPI 2: Investimentos -->
+        <div class="stats-kpi-card">
+          <div class="stats-kpi-title-row">
+            <span>Patrimônio em Investimentos</span>
+            <span>📈</span>
+          </div>
+          <div class="stats-kpi-value" style="color: var(--mister-success-green);">${formatMoney(investTotal)}</div>
+          <div class="stats-kpi-footer">
+            <span>${investments.length} aplicações ativas</span>
+            <span>100% CDI / SELIC</span>
+          </div>
+        </div>
+
+        <!-- KPI 3: Empréstimos -->
+        <div class="stats-kpi-card">
+          <div class="stats-kpi-title-row">
+            <span>Saldo Devedor Empréstimos</span>
+            <span>📑</span>
+          </div>
+          <div class="stats-kpi-value" style="color: var(--mister-debit-red);">${formatMoney(loanDebt)}</div>
+          <div class="stats-kpi-footer">
+            <span>${loans.length} contrato(s)</span>
+            <span>Taxa CET Open Finance</span>
+          </div>
+        </div>
+
+        <!-- KPI 4: Conta Corrente -->
+        <div class="stats-kpi-card">
+          <div class="stats-kpi-title-row">
+            <span>Saldo em Conta Corrente</span>
+            <span>🏦</span>
+          </div>
+          <div class="stats-kpi-value">${formatMoney(bankBalance)}</div>
+          <div class="stats-kpi-footer">
+            <span>${data?.checkingTransactions?.length || 0} movimentações</span>
+            <span>Pluggy Bank PJ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON Inspector Integrado -->
+      <div class="json-inspector-box">
+        <div class="json-inspector-header">
+          <div class="json-subtabs">
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'all' ? 'active' : ''}" data-subtab="all">Payload Completo</button>
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'card' ? 'active' : ''}" data-subtab="card">Cartão</button>
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'investments' ? 'active' : ''}" data-subtab="investments">Investimentos</button>
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'loans' ? 'active' : ''}" data-subtab="loans">Empréstimos</button>
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'checking' ? 'active' : ''}" data-subtab="checking">Extrato</button>
+            <button type="button" class="json-subtab-btn ${state.jsonSubTab === 'item' ? 'active' : ''}" data-subtab="item">Item & Conector</button>
+          </div>
+          <button type="button" class="btn-copy-code" id="btnCopyJson">📋 Copiar JSON</button>
+        </div>
+        <pre class="json-pre-code" id="jsonPreBlock"><code>${escapeHtml(jsonString)}</code></pre>
+      </div>
+    </div>
+  `;
+}
+
+function setupJsonInspectorEvents() {
+  document.querySelectorAll('.json-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.jsonSubTab = btn.dataset.subtab;
+      renderCurrentView();
+    });
+  });
+
+  document.getElementById('btnCopyJson')?.addEventListener('click', () => {
+    const code = document.getElementById('jsonPreBlock')?.innerText;
+    if (code) {
+      navigator.clipboard.writeText(code).then(() => {
+        alert('JSON copiado para a área de transferência!');
+      });
+    }
+  });
+}
+
+// =========================================================
+// VIEW 6: EMPRESA
+// =========================================================
+function renderEmpresaHtml() {
+  const item = state.activeData?.item || {};
+  const connector = item.connector || {};
+
+  return `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+      <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: var(--mister-radius-md); padding: 22px;">
+        <h3 style="color: #002b80; font-size: 15px; margin-bottom: 14px; border-bottom: 1px solid var(--mister-border-subtle); padding-bottom: 8px;">
+          🏢 Identificação da Empresa Conectada
+        </h3>
+        <p style="margin-bottom: 8px;"><strong>Razão Social:</strong> EMPRESA TESTE MISTER CONTADOR LTDA</p>
+        <p style="margin-bottom: 8px;"><strong>Nome Fantasia:</strong> EMPRESA TESTE</p>
+        <p style="margin-bottom: 8px;"><strong>CNPJ:</strong> 00.000.000/0001-91</p>
+        <p style="margin-bottom: 8px;"><strong>Segmento:</strong> Comércio Varejista / Mercado</p>
+        <p style="margin-bottom: 8px;"><strong>Regime Tributário:</strong> Simples Nacional</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: var(--mister-radius-md); padding: 22px;">
+        <h3 style="color: #002b80; font-size: 15px; margin-bottom: 14px; border-bottom: 1px solid var(--mister-border-subtle); padding-bottom: 8px;">
+          🔌 Conexão Bancária Open Finance
+        </h3>
+        <p style="margin-bottom: 8px;"><strong>Instituição:</strong> ${connector.name || 'Pluggy Bank (Sandbox)'}</p>
+        <p style="margin-bottom: 8px;"><strong>Status do Conector:</strong> <span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 10px; font-weight: 600;">${item.status || (state.connectedItemId ? 'UPDATED' : 'DESCONECTADO')}</span></p>
+        <p style="margin-bottom: 8px;"><strong>ID da Conexão (Item ID):</strong> <code>${item.id || state.connectedItemId || 'Nenhum item conectado'}</code></p>
+        <p style="margin-bottom: 8px;"><strong>Ambiente:</strong> Sandbox Pluggy Open Finance</p>
+        <button type="button" class="btn-mister-filter" style="margin-top: 10px;" onclick="window.launchPluggyWidget()">Gerenciar Conexão</button>
+      </div>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 7: PERMISSÕES
+// =========================================================
+function renderPermissoesHtml() {
+  const isConn = Boolean(state.connectedItemId || state.activeData);
+
+  return `
+    <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: var(--mister-radius-md); padding: 24px; max-width: 800px;">
+      <h3 style="color: #002b80; font-size: 15px; margin-bottom: 12px;">
+        🔒 Gestão de Consentimento & Permissões Open Finance
+      </h3>
+      <p style="color: var(--mister-text-muted); font-size: 12.5px; margin-bottom: 20px; line-height: 1.5;">
+        Em conformidade com a regulação de Open Finance do Banco Central do Brasil, a empresa concede acesso aos dados estritamente para fins de conciliação e escrituração contábil no Mister Contador.
+      </p>
+
+      <div style="border: 1px solid var(--mister-border-subtle); border-radius: 8px; padding: 16px; margin-bottom: 20px; background: #f8fafc;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <strong>Consentimento de Dados Bancários:</strong>
+          <span style="background: ${isConn ? '#dcfce7' : '#fef3c7'}; color: ${isConn ? '#15803d' : '#b45309'}; padding: 3px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;">
+            ${isConn ? 'ATIVO & AUTORIZADO' : 'PENDENTE DE AUTORIZAÇÃO'}
+          </span>
+        </div>
+        <p style="font-size: 12px; color: #475569;">
+          <strong>Escopos Autorizados:</strong> Consulta de saldo, extratos de conta corrente, comprovantes de pagamento (paymentData), faturas de cartão de crédito PJ, recebíveis de maquininha, contratos de empréstimo e investimentos.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn-mister-filter" onclick="window.launchPluggyWidget()">
+          <span>${isConn ? 'Renovar / Reconectar Permissão' : 'Autorizar Conexão Pluggy'}</span>
+        </button>
+        ${isConn ? '<button type="button" class="btn-cancel" onclick="window.misterState.activeData=null; window.misterState.connectedItemId=null; localStorage.removeItem(\'pluggy_connected_item_id\'); switchView(\'inicio\');">Revogar Acesso</button>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+// =========================================================
+// VIEW 8: INÍCIO
+// =========================================================
+function renderInicioViewHtml() {
+  const isConn = Boolean(state.connectedItemId || state.activeData);
+
+  return `
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="background: linear-gradient(135deg, #002b80 0%, #1a56c4 100%); color: #fff; border-radius: var(--mister-radius-md); padding: 28px; box-shadow: var(--mister-shadow-md);">
+        <h2 style="font-size: 20px; margin-bottom: 8px;">Bem-vindo ao Mister Contador Open Finance</h2>
+        <p style="opacity: 0.9; font-size: 13.5px; max-width: 650px; line-height: 1.5; margin-bottom: 20px;">
+          Sincronização bancária direta e conciliação contábil automatizada. Conecte suas contas corporativas via Pluggy para visualizar comprovantes, extratos, faturas de cartão e estatísticas em tempo real.
+        </p>
+        <button type="button" class="btn-mister-action" style="background: #ffffff; color: #002b80; font-weight: 700; font-size: 13px; padding: 10px 20px;" onclick="window.launchPluggyWidget()">
+          <span>${isConn ? 'Reconectar / Atualizar Dados' : '🔌 Conectar Conta com Pluggy'}</span>
+        </button>
+      </div>
+
+      <!-- Grade de Atalhos das Novas Funcionalidades -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('comprovantes')">
+          <div style="font-size: 22px; margin-bottom: 6px;">🧾</div>
+          <strong style="color: #002b80;">Comprovantes</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Detalhamento de pagamentos, boletos e PIX com paymentData.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('registro')">
+          <div style="font-size: 22px; margin-bottom: 6px;">📑</div>
+          <strong style="color: #002b80;">Registro Contábil</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Partidas dobradas automáticas (débito/crédito).</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('extrato')">
+          <div style="font-size: 22px; margin-bottom: 6px;">🏦</div>
+          <strong style="color: #002b80;">Extrato Bancário</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Movimentações de conta corrente em tempo real.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('cartao')">
+          <div style="font-size: 22px; margin-bottom: 6px;">💳</div>
+          <strong style="color: #002b80;">Cartão de Crédito</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Faturas M-1 fechado e recebíveis de maquininha.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('investimentos')">
+          <div style="font-size: 22px; margin-bottom: 6px;">📈</div>
+          <strong style="color: #002b80;">Investimentos</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Acompanhamento de saldo e rentabilidade.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('emprestimos')">
+          <div style="font-size: 22px; margin-bottom: 6px;">🤝</div>
+          <strong style="color: #002b80;">Empréstimos</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Contratos e saldo devedor.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--mister-border); border-radius: 8px; padding: 16px; cursor: pointer;" onclick="switchView('estatisticas')">
+          <div style="font-size: 22px; margin-bottom: 6px;">📊</div>
+          <strong style="color: #002b80;">Estatísticas</strong>
+          <p style="color: var(--mister-text-muted); font-size: 11.5px; margin-top: 4px;">Dashboard executivo, KPIs de limites e JSON Inspector.</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Atualiza o dropdown de contas
+function updateAccountsDropdown() {
+  const select = document.getElementById('accountSelect');
+  if (!select) return;
+
+  if (!state.activeData || !state.activeData.accounts || state.activeData.accounts.length === 0) {
+    select.innerHTML = '<option value="all">Todas as Contas</option>';
+    return;
+  }
+
+  let html = '<option value="all">Todas as Contas</option>';
+  state.activeData.accounts.forEach(acc => {
+    html += `<option value="${acc.id}">${acc.name} - ${acc.number || ''}</option>`;
+  });
+  select.innerHTML = html;
+  
+  if (state.currentAccount !== 'all' && state.activeData.accounts.find(a => a.id === state.currentAccount)) {
+    select.value = state.currentAccount;
+  } else {
+    select.value = 'all';
+    state.currentAccount = 'all';
+  }
+}
+
+// Retorna todas as transações consolidadas aplicando filtro de subtipo
+function getFilteredTransactions() {
+  if (!state.activeData) return [];
+
+  const chkTxs = state.activeData.checkingTransactions || [];
+  const cardTxs = state.activeData.cardStatements?.flatMap(c => c.transactions || []) || [];
+  let all = [...chkTxs, ...cardTxs];
+
+  if (state.currentAccount !== 'all') {
+    all = all.filter(t => t.accountId === state.currentAccount);
+  }
+
+  if (state.subTypeFilter === 'debit') {
+    all = all.filter(t => t.type === 'DEBIT' || Number(t.amount) < 0);
+  } else if (state.subTypeFilter === 'credit') {
+    all = all.filter(t => t.type === 'CREDIT' || Number(t.amount) > 0);
+  } else if (state.subTypeFilter === 'pix') {
+    all = all.filter(t => (t.description || '').toUpperCase().includes('PIX'));
+  } else if (state.subTypeFilter === 'boleto') {
+    all = all.filter(t => (t.description || '').toUpperCase().includes('BOLETO'));
+  }
+
+  return all;
+}
+
+// =========================================================
+// INTEGRAÇÃO COM O PLUGGY CONNECT WIDGET (DADOS REAIS)
+// =========================================================
 async function launchPluggyWidget() {
+  const overlay = document.getElementById('connectOverlay');
   const loadingState = document.getElementById('modalLoadingState');
   const loadingText = document.getElementById('modalLoadingText');
   const startBtn = document.getElementById('startWidgetBtn');
+  const credsBox = document.getElementById('credentialsPrompt');
 
+  overlay.style.display = 'flex';
   loadingState.style.display = 'block';
   startBtn.style.display = 'none';
+  if (credsBox) credsBox.style.display = 'none';
   loadingText.textContent = 'Gerando Connect Token seguro...';
 
   try {
@@ -293,52 +1100,55 @@ async function launchPluggyWidget() {
 
     if (!tokenRes.ok) {
       const err = await tokenRes.json();
+      if (!state.config?.hasEnvKeys) {
+        loadingState.style.display = 'none';
+        startBtn.style.display = 'block';
+        if (credsBox) credsBox.style.display = 'block';
+        return;
+      }
       throw new Error(err.error || 'Falha ao autenticar na Pluggy');
     }
 
     const data = await tokenRes.json();
-    loadingText.textContent = 'Carregando widget Pluggy Connect...';
+    loadingText.textContent = 'Abrindo Pluggy Connect Widget...';
 
     if (typeof window.PluggyConnect === 'undefined') {
-      throw new Error('Script do Pluggy Connect não carregado.');
+      throw new Error('Script do Pluggy Connect não carregado. Verifique sua conexão com a internet.');
     }
 
     const pluggyConnect = new window.PluggyConnect({
       connectToken: data.accessToken,
       includeSandbox: true,
       onOpen: () => {
-        document.getElementById('connectOverlay').style.display = 'none';
+        overlay.style.display = 'none';
+        loadingState.style.display = 'none';
+        startBtn.style.display = 'block';
       },
       onSuccess: async (itemData) => {
         const itemId = itemData.item?.id || itemData.itemId;
         state.connectedItemId = itemId;
-        console.log('✅ Item Pluggy Conectado:', itemId);
+        localStorage.setItem('pluggy_connected_item_id', itemId);
+        console.log('✅ Item Conectado:', itemId);
 
-        document.getElementById('connectOverlay').style.display = 'flex';
+        overlay.style.display = 'flex';
         loadingState.style.display = 'block';
-        loadingText.textContent = `Sincronizando dados do Item ${itemId} via Pluggy API...`;
+        loadingText.textContent = `Sincronizando dados reais do Item ${itemId}...`;
 
-        const f = state.currentFilter;
-        try {
-          const itemRes = await fetch(`/api/item-data?itemId=${itemId}&from=${f.from}&to=${f.to}&label=${encodeURIComponent(f.label)}`);
-          state.activeData = await itemRes.json();
-          console.log('📦 JSON COMPLETO DA CONEXÃO REAL:', state.activeData);
+        await fetchItemData(itemId);
 
-          document.getElementById('connectOverlay').style.display = 'none';
-          loadingState.style.display = 'none';
-          startBtn.style.display = 'block';
-          renderDashboard();
-        } catch (fetchErr) {
-          alert('Erro ao consolidar dados do Item: ' + fetchErr.message);
-        }
+        overlay.style.display = 'none';
+        loadingState.style.display = 'none';
+        startBtn.style.display = 'block';
       },
       onError: (err) => {
         console.error('Erro no widget:', err);
         alert('Erro no widget da Pluggy: ' + (err.message || 'Falha ao conectar'));
+        overlay.style.display = 'none';
         loadingState.style.display = 'none';
         startBtn.style.display = 'block';
       },
       onClose: () => {
+        overlay.style.display = 'none';
         loadingState.style.display = 'none';
         startBtn.style.display = 'block';
       }
@@ -347,691 +1157,43 @@ async function launchPluggyWidget() {
     pluggyConnect.init();
   } catch (err) {
     alert(err.message);
+    overlay.style.display = 'none';
     loadingState.style.display = 'none';
     startBtn.style.display = 'block';
   }
 }
 
-// --- Renderização do Dashboard ---
-function renderDashboard() {
-  if (!state.activeData) return;
-
-  renderHeaderCard();
-  renderKPIs();
-  renderTabBadges();
-  renderTabContent();
-}
-
-// Atualiza Card de Conector no Header
-function renderHeaderCard() {
-  const item = state.activeData.item || {};
-  const connector = item.connector || {};
-
-  const nameEl = document.getElementById('connectorName');
-  const idEl = document.getElementById('connectorItemId');
-  const syncText = document.getElementById('lastSyncText');
-
-  if (nameEl) nameEl.textContent = connector.name || 'Pluggy Bank (Sandbox)';
-  if (idEl) idEl.textContent = `Item: ${item.id || 'mock-item'}`;
-  if (syncText && state.activeData.timestamp) {
-    const d = new Date(state.activeData.timestamp);
-    syncText.textContent = `Atualizado às ${d.toLocaleTimeString('pt-BR')}`;
-  }
-}
-
-// Renderiza KPIs
-function renderKPIs() {
-  const data = state.activeData;
-
-  // 1. Cartão de Crédito
-  const cardStmt = data.cardStatements?.[0] || {};
-  const cardTxs = cardStmt.transactions || [];
-  const cardAccount = cardStmt.account || data.accounts?.find(a => a.type === 'CREDIT') || {};
-  const creditData = cardAccount.creditData || {};
-
-  const totalCardSpend = cardTxs.reduce((sum, tx) => {
-    return (tx.type === 'DEBIT' || Number(tx.amount) < 0) ? sum + Math.abs(Number(tx.amount)) : sum;
-  }, 0);
-
-  document.getElementById('kpiCardSpend').textContent = formatMoney(totalCardSpend);
-  document.getElementById('kpiCardTxCount').textContent = `${cardTxs.length} transações`;
-  document.getElementById('kpiCardLimitAvailable').textContent = formatMoney(creditData.availableCreditLimit || 22519.10);
-  document.getElementById('kpiCardLimitTotal').textContent = `de ${formatMoney(creditData.creditLimit || 25000)}`;
-
-  // 2. Investimentos
-  const investments = data.investments || [];
-  const totalInvest = investments.reduce((sum, inv) => sum + (Number(inv.balance || inv.value) || 0), 0);
-
-  document.getElementById('kpiInvestTotal').textContent = formatMoney(totalInvest);
-  document.getElementById('kpiInvestCount').textContent = `${investments.length} aplicações`;
-
-  // 3. Empréstimos
-  const loans = data.loans || [];
-  const totalLoanDebt = loans.reduce((sum, l) => sum + (Number(l.outstandingBalance) || 0), 0);
-  const nextInstallment = loans[0]?.installmentAmount || 1620.50;
-  const loanRate = loans[0]?.interestRate ? `${loans[0].interestRate}% a.m.` : '1.89% a.m.';
-
-  document.getElementById('kpiLoanOutstanding').textContent = formatMoney(totalLoanDebt);
-  document.getElementById('kpiLoanInstallment').textContent = formatMoney(nextInstallment);
-  document.getElementById('kpiLoanRate').textContent = loanRate;
-
-  // 4. Conta Corrente
-  const checkingAcc = data.accounts?.find(a => a.type === 'BANK') || {};
-  const chkTxs = data.checkingTransactions || [];
-
-  document.getElementById('kpiBankBalance').textContent = formatMoney(checkingAcc.balance || 21544.60);
-  document.getElementById('kpiBankTxCount').textContent = `${chkTxs.length} movim.`;
-  document.getElementById('kpiBankTransferNumber').textContent = checkingAcc.bankData?.transferNumber
-    ? `Ag/Conta: ${checkingAcc.bankData.transferNumber}`
-    : 'Conta Corrente Sandbox';
-}
-
-// Atualiza contadores nas abas
-function renderTabBadges() {
-  const data = state.activeData;
-  const cardCount = data.cardStatements?.[0]?.transactions?.length || 0;
-  const investCount = data.investments?.length || 0;
-  const loanCount = data.loans?.length || 0;
-  const checkingCount = data.checkingTransactions?.length || 0;
-
-  document.getElementById('tabCardBadge').textContent = cardCount;
-  document.getElementById('tabInvestBadge').textContent = investCount;
-  document.getElementById('tabLoanBadge').textContent = loanCount;
-  document.getElementById('tabCheckingBadge').textContent = checkingCount;
-}
-
-// --- Renderização de Abas de Conteúdo ---
-function renderTabContent() {
-  const container = document.getElementById('tabContentArea');
-  if (!container) return;
-
-  switch (state.activeTab) {
-    case 'overview':
-      container.innerHTML = renderOverviewHtml();
-      break;
-    case 'card':
-      container.innerHTML = renderCardTabHtml();
-      break;
-    case 'investments':
-      container.innerHTML = renderInvestmentsTabHtml();
-      break;
-    case 'loans':
-      container.innerHTML = renderLoansTabHtml();
-      break;
-    case 'checking':
-      container.innerHTML = renderCheckingTabHtml();
-      break;
-    case 'json-inspector':
-      container.innerHTML = renderJsonInspectorHtml();
-      setupJsonInspectorListeners();
-      break;
-    default:
-      container.innerHTML = renderOverviewHtml();
-  }
-
-  // Registra botões de visualização rápida do JSON individual
-  document.querySelectorAll('.btn-json-inspect').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const entity = btn.dataset.entity;
-      const id = btn.dataset.id;
-      inspectEntityJson(entity, id);
-    });
-  });
-}
-
-// --- ABA 1: VISÃO GERAL (TODOS OS DADOS) ---
-function renderOverviewHtml() {
-  const data = state.activeData;
-  const cardStmt = data.cardStatements?.[0] || {};
-  const cardTxs = (cardStmt.transactions || []).slice(0, 5);
-  const investments = (data.investments || []).slice(0, 3);
-  const loans = data.loans || [];
-  const chkTxs = (data.checkingTransactions || []).slice(0, 4);
-
-  return `
-    <div class="overview-sections">
-      <!-- Seção 1: Cartão de Crédito Destaque -->
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">💳 Extrato de Cartão de Crédito (Período Fechado M-1)</h3>
-          <button type="button" class="btn-control" onclick="window.state.activeTab='card'; renderDashboard();">Ver todas (${cardStmt.transactions?.length || 0}) →</button>
-        </div>
-        ${renderCardTransactionsTable(cardTxs)}
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; margin-bottom: 20px;">
-        <!-- Seção 2: Investimentos Destaque -->
-        <div class="content-card" style="margin-bottom: 0;">
-          <div class="content-card-header">
-            <h3 class="content-card-title">📈 Posições em Investimentos</h3>
-            <button type="button" class="btn-control" onclick="window.state.activeTab='investments'; renderDashboard();">Ver carteira (${data.investments?.length || 0}) →</button>
-          </div>
-          ${renderInvestmentsGrid(investments)}
-        </div>
-
-        <!-- Seção 3: Empréstimos Destaque -->
-        <div class="content-card" style="margin-bottom: 0;">
-          <div class="content-card-header">
-            <h3 class="content-card-title">📑 Contratos de Empréstimo (Open Finance)</h3>
-            <button type="button" class="btn-control" onclick="window.state.activeTab='loans'; renderDashboard();">Ver detalhes →</button>
-          </div>
-          ${renderLoansGrid(loans)}
-        </div>
-      </div>
-
-      <!-- Seção 4: Conta Corrente Destaque -->
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">🏦 Movimentações Recentes em Conta Corrente</h3>
-          <button type="button" class="btn-control" onclick="window.state.activeTab='checking'; renderDashboard();">Ver extrato completo →</button>
-        </div>
-        ${renderCheckingTransactionsTable(chkTxs)}
-      </div>
-    </div>
-  `;
-}
-
-// --- ABA 2: CARTÃO DE CRÉDITO ---
-function renderCardTabHtml() {
-  const data = state.activeData;
-  const cardStmt = data.cardStatements?.[0] || {};
-  const cardAccount = cardStmt.account || data.accounts?.find(a => a.type === 'CREDIT') || {};
-  const creditData = cardAccount.creditData || {};
-  let txs = cardStmt.transactions || [];
-
-  if (state.searchQuery) {
-    const q = state.searchQuery;
-    txs = txs.filter(t =>
-      (t.description || '').toLowerCase().includes(q) ||
-      (t.category || '').toLowerCase().includes(q) ||
-      (String(t.amount)).includes(q)
-    );
-  }
-
-  const limitTotal = creditData.creditLimit || 25000;
-  const limitAvailable = creditData.availableCreditLimit || 22519.10;
-  const limitUsed = limitTotal - limitAvailable;
-  const limitPercent = Math.min(100, Math.round((limitUsed / limitTotal) * 100));
-
-  return `
-    <div class="card-tab-content">
-      <!-- Card Metadados do Cartão -->
-      <div class="card-meta-box">
-        <div class="card-meta-item">
-          <span class="card-meta-label">Bandeira / Nível</span>
-          <span class="card-meta-value">💳 ${creditData.brand || 'MASTERCARD'} ${creditData.level || 'BLACK'}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Limite Total</span>
-          <span class="card-meta-value">${formatMoney(limitTotal)}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Limite Disponível</span>
-          <span class="card-meta-value text-success">${formatMoney(limitAvailable)}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Vencimento da Fatura</span>
-          <span class="card-meta-value">${formatDate(creditData.balanceDueDate || '2026-08-10')}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Fechamento da Fatura</span>
-          <span class="card-meta-value">${formatDate(creditData.balanceCloseDate || '2026-08-31')}</span>
-        </div>
-      </div>
-
-      <!-- Tabela de Transações -->
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">
-            Extrato de Compras e Faturas
-            <span class="content-card-badge">${txs.length} itens encontrados</span>
-          </h3>
-        </div>
-        ${renderCardTransactionsTable(txs)}
-      </div>
-    </div>
-  `;
-}
-
-function renderCardTransactionsTable(txs) {
-  if (!txs || txs.length === 0) {
-    return `<div style="text-align: center; padding: 40px; color: #94a3b8;">Nenhuma transação encontrada para este filtro.</div>`;
-  }
-
-  const rows = txs.map(tx => {
-    const isDebit = (Number(tx.amount) || 0) < 0 || tx.type === 'DEBIT';
-    const amountClass = isDebit ? 'amount-debit' : 'amount-credit';
-    const amountFormatted = (isDebit ? '- ' : '+ ') + formatMoney(Math.abs(tx.amount));
-    const catClass = getCategoryClass(tx.category || '');
-
-    let installmentInfo = '';
-    if (tx.creditCardMetadata?.totalInstallments && tx.creditCardMetadata.totalInstallments > 1) {
-      installmentInfo = `<span class="installment-tag">${tx.creditCardMetadata.installmentNumber || 1}/${tx.creditCardMetadata.totalInstallments}</span>`;
+// Busca os dados consolidados do Item na API da Pluggy
+async function fetchItemData(itemId) {
+  const f = state.currentFilter;
+  try {
+    const res = await fetch(`/api/item-data?itemId=${itemId}&from=${f.from}&to=${f.to}&label=${encodeURIComponent(f.label)}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Erro ao carregar dados do item');
     }
 
-    return `
-      <tr>
-        <td style="white-space: nowrap; font-weight: 500;">${formatDate(tx.date)}</td>
-        <td>
-          <span style="font-weight: 600; color: #0f172a;">${tx.description || tx.descriptionRaw || 'Compra no Cartão'}</span>
-          ${installmentInfo}
-        </td>
-        <td>
-          <span class="category-pill ${catClass}">
-            🏷️ ${tx.category || 'Geral'}
-          </span>
-        </td>
-        <td>
-          <span style="font-size: 11px; font-weight: 600; color: ${isDebit ? '#dc2626' : '#16a34a'};">
-            ${tx.type || (isDebit ? 'DEBIT' : 'CREDIT')}
-          </span>
-        </td>
-        <td style="text-align: right;" class="${amountClass}">
-          ${amountFormatted}
-        </td>
-        <td style="text-align: center; width: 60px;">
-          <button type="button" class="btn-json-inspect" data-entity="cardTx" data-id="${tx.id}" title="Ver JSON puro">{ }</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
+    state.activeData = await res.json();
+    console.log('📦 DADOS REAIS RETORNADOS DA PLUGGY:', state.activeData);
 
-  return `
-    <div class="modern-table-wrapper">
-      <table class="modern-table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Estabelecimento / Descrição</th>
-            <th>Categoria</th>
-            <th>Tipo</th>
-            <th style="text-align: right;">Valor</th>
-            <th style="text-align: center;">JSON</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
+    // Atualiza status do topo
+    const statusDot = document.getElementById('topbarStatusDot');
+    const statusText = document.getElementById('topbarStatusText');
+    const btnLabel = document.getElementById('btnConnectLabel');
 
-// --- ABA 3: INVESTIMENTOS & APLICAÇÕES ---
-function renderInvestmentsTabHtml() {
-  let investments = state.activeData.investments || [];
+    if (statusDot) statusDot.classList.remove('disconnected');
+    if (statusText) statusText.textContent = `Pluggy Bank (Item: ${itemId.slice(0, 8)}...)`;
+    if (btnLabel) btnLabel.textContent = 'Atualizar';
 
-  if (state.searchQuery) {
-    const q = state.searchQuery;
-    investments = investments.filter(inv =>
-      (inv.name || '').toLowerCase().includes(q) ||
-      (inv.type || '').toLowerCase().includes(q) ||
-      (inv.subtype || '').toLowerCase().includes(q) ||
-      (inv.institution || '').toLowerCase().includes(q)
-    );
-  }
-
-  return `
-    <div class="investments-tab-content">
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">
-            Carteira de Aplicações e Renda Fixa
-            <span class="content-card-badge">${investments.length} ativos</span>
-          </h3>
-        </div>
-        ${renderInvestmentsGrid(investments)}
-      </div>
-    </div>
-  `;
-}
-
-function renderInvestmentsGrid(investments) {
-  if (!investments || investments.length === 0) {
-    return `<div style="text-align: center; padding: 40px; color: #94a3b8;">Nenhum investimento registrado.</div>`;
-  }
-
-  const cards = investments.map(inv => {
-    const balance = Number(inv.balance || inv.value) || 0;
-    const rateText = inv.rateType ? `${inv.annualRate || 100}% ${inv.rateType}` : (inv.rate ? `${inv.rate}% a.a.` : 'CDI');
-
-    return `
-      <div class="invest-card">
-        <div>
-          <div class="invest-top">
-            <span class="invest-type-badge">${inv.subtype || inv.type || 'INVESTIMENTO'}</span>
-            <button type="button" class="btn-json-inspect" data-entity="investment" data-id="${inv.id}" title="Ver JSON do ativo">{ }</button>
-          </div>
-          <h4 class="invest-name">${inv.name || 'Aplicação Financeira'}</h4>
-          <div class="invest-institution">
-            🏛️ ${inv.institution || 'Pluggy Invest'}
-          </div>
-          <div class="invest-specs-row">
-            <div class="spec-item">
-              <span class="spec-label">Indexador / Taxa</span>
-              <span class="spec-val" style="color: #2563eb;">${rateText}</span>
-            </div>
-            <div class="spec-item">
-              <span class="spec-label">Vencimento</span>
-              <span class="spec-val">${formatDate(inv.dueDate || 'Liquidez Diária')}</span>
-            </div>
-          </div>
-        </div>
-        <div class="invest-bottom">
-          <span class="invest-balance-label">Saldo Atual Bruto</span>
-          <span class="invest-balance-val">${formatMoney(balance)}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="investments-grid">${cards}</div>`;
-}
-
-// --- ABA 4: EMPRÉSTIMOS & FINANCIAMENTOS (OPEN FINANCE) ---
-function renderLoansTabHtml() {
-  const loans = state.activeData.loans || [];
-
-  return `
-    <div class="loans-tab-content">
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">
-            Contratos de Empréstimo e Linhas de Crédito PJ (Open Finance)
-            <span class="content-card-badge">${loans.length} contratos</span>
-          </h3>
-        </div>
-        ${renderLoansGrid(loans)}
-      </div>
-    </div>
-  `;
-}
-
-function renderLoansGrid(loans) {
-  if (!loans || loans.length === 0) {
-    return `<div style="text-align: center; padding: 40px; color: #94a3b8;">Nenhum empréstimo ativo registrado via Open Finance.</div>`;
-  }
-
-  const cards = loans.map(loan => {
-    const totalInstallments = loan.installmentsTotal || 24;
-    const paidInstallments = loan.installmentsPaid || 13;
-    const remainingInstallments = loan.installmentsRemaining || (totalInstallments - paidInstallments);
-    const percentPaid = Math.min(100, Math.round((paidInstallments / totalInstallments) * 100));
-
-    return `
-      <div class="loan-card">
-        <div class="loan-header">
-          <div>
-            <h4 class="loan-title">📑 Contrato: ${loan.contractNumber || loan.id}</h4>
-            <span style="font-size: 11px; color: #64748b;">${loan.type || 'Capital de Giro / Crédito PJ'} • Pluggy Bank</span>
-          </div>
-          <button type="button" class="btn-json-inspect" data-entity="loan" data-id="${loan.id}" title="Ver JSON do contrato">{ }</button>
-        </div>
-
-        <div class="loan-stats-grid">
-          <div class="loan-stat">
-            <span class="loan-stat-label">Saldo Devedor Atual</span>
-            <span class="loan-stat-val text-danger">${formatMoney(loan.outstandingBalance || 14500)}</span>
-          </div>
-          <div class="loan-stat">
-            <span class="loan-stat-label">Valor Original Contratado</span>
-            <span class="loan-stat-val">${formatMoney(loan.contractAmount || 30000)}</span>
-          </div>
-          <div class="loan-stat">
-            <span class="loan-stat-label">Valor da Parcela</span>
-            <span class="loan-stat-val">${formatMoney(loan.installmentAmount || 1620.50)}</span>
-          </div>
-          <div class="loan-stat">
-            <span class="loan-stat-label">Taxa de Juros Mensal (CET)</span>
-            <span class="loan-stat-val" style="color: #d97706;">${loan.interestRate || 1.89}% a.m.</span>
-          </div>
-        </div>
-
-        <div class="loan-progress-box">
-          <div class="loan-progress-label-row">
-            <span><strong>Progresso de Quitação:</strong> ${paidInstallments} de ${totalInstallments} parcelas pagas</span>
-            <span style="font-weight: 600; color: #2563eb;">${percentPaid}%</span>
-          </div>
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar-fill" style="width: ${percentPaid}%;"></div>
-          </div>
-          <div style="font-size: 10.5px; color: #64748b; margin-top: 6px; display: flex; justify-content: space-between;">
-            <span>Restam ${remainingInstallments} parcelas</span>
-            <span>Próximo vencimento: ${formatDate(loan.dueDate || '2026-10-15')}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="loans-grid">${cards}</div>`;
-}
-
-// --- ABA 5: CONTA CORRENTE & EXTRATO ---
-function renderCheckingTabHtml() {
-  const data = state.activeData;
-  const checkingAcc = data.accounts?.find(a => a.type === 'BANK') || {};
-  let chkTxs = data.checkingTransactions || [];
-
-  if (state.searchQuery) {
-    const q = state.searchQuery;
-    chkTxs = chkTxs.filter(t =>
-      (t.description || '').toLowerCase().includes(q) ||
-      (t.category || '').toLowerCase().includes(q) ||
-      (t.paymentData?.receiver?.name || '').toLowerCase().includes(q) ||
-      (String(t.amount)).includes(q)
-    );
-  }
-
-  return `
-    <div class="checking-tab-content">
-      <div class="card-meta-box">
-        <div class="card-meta-item">
-          <span class="card-meta-label">Instituição / Conta</span>
-          <span class="card-meta-value">🏦 ${checkingAcc.name || 'Conta Corrente Sandbox'}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Agência e Conta</span>
-          <span class="card-meta-value">${checkingAcc.bankData?.transferNumber || '123/0001/12345-0'}</span>
-        </div>
-        <div class="card-meta-item">
-          <span class="card-meta-label">Saldo Disponível</span>
-          <span class="card-meta-value text-success">${formatMoney(checkingAcc.balance || 21544.60)}</span>
-        </div>
-      </div>
-
-      <div class="content-card">
-        <div class="content-card-header">
-          <h3 class="content-card-title">
-            Extrato de Movimentações Bancárias
-            <span class="content-card-badge">${chkTxs.length} transações</span>
-          </h3>
-        </div>
-        ${renderCheckingTransactionsTable(chkTxs)}
-      </div>
-    </div>
-  `;
-}
-
-function renderCheckingTransactionsTable(txs) {
-  if (!txs || txs.length === 0) {
-    return `<div style="text-align: center; padding: 40px; color: #94a3b8;">Nenhuma movimentação de conta corrente registrada.</div>`;
-  }
-
-  const rows = txs.map(tx => {
-    const isDebit = (Number(tx.amount) || 0) < 0 || tx.type === 'DEBIT';
-    const amountClass = isDebit ? 'amount-debit' : 'amount-credit';
-    const amountFormatted = (isDebit ? '- ' : '+ ') + formatMoney(Math.abs(tx.amount));
-    const catClass = getCategoryClass(tx.category || '');
-    const counterparty = tx.paymentData?.receiver?.name || tx.paymentData?.payer?.name || '—';
-    const method = tx.paymentData?.paymentMethod || (isDebit ? 'DÉBITO' : 'CRÉDITO');
-
-    return `
-      <tr>
-        <td style="white-space: nowrap; font-weight: 500;">${formatDate(tx.date)}</td>
-        <td>
-          <span style="font-weight: 600; color: #0f172a;">${tx.description || tx.descriptionRaw || 'Transação C/C'}</span>
-        </td>
-        <td>
-          <span class="category-pill ${catClass}">
-            🏷️ ${tx.category || 'Geral'}
-          </span>
-        </td>
-        <td>
-          <span style="font-size: 11px; color: #475569; font-weight: 500;">
-            ${counterparty}
-          </span>
-        </td>
-        <td>
-          <span style="font-size: 10.5px; font-weight: 600; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
-            ${method}
-          </span>
-        </td>
-        <td style="text-align: right;" class="${amountClass}">
-          ${amountFormatted}
-        </td>
-        <td style="text-align: center; width: 60px;">
-          <button type="button" class="btn-json-inspect" data-entity="chkTx" data-id="${tx.id}" title="Ver JSON puro">{ }</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  return `
-    <div class="modern-table-wrapper">
-      <table class="modern-table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Descrição</th>
-            <th>Categoria</th>
-            <th>Contraparte (Pagador / Favorecido)</th>
-            <th>Método</th>
-            <th style="text-align: right;">Valor</th>
-            <th style="text-align: center;">JSON</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// --- ABA 6: JSON INSPECTOR INTEGRADO ---
-function renderJsonInspectorHtml() {
-  const data = state.activeData || {};
-  let targetData = data;
-  const sub = state.jsonSubTab || 'all';
-
-  if (sub === 'card') targetData = data.cardStatements || [];
-  else if (sub === 'investments') targetData = data.investments || [];
-  else if (sub === 'loans') targetData = data.loans || [];
-  else if (sub === 'checking') targetData = data.checkingTransactions || [];
-  else if (sub === 'accounts') targetData = data.accounts || [];
-  else if (sub === 'item') targetData = data.item || {};
-
-  const jsonString = JSON.stringify(targetData, null, 2);
-
-  return `
-    <div class="json-viewer-container">
-      <div class="json-viewer-header">
-        <div class="json-tabs">
-          <button type="button" class="json-tab-btn ${sub === 'all' ? 'active' : ''}" data-subtab="all">Todos os Dados</button>
-          <button type="button" class="json-tab-btn ${sub === 'card' ? 'active' : ''}" data-subtab="card">Cartão de Crédito</button>
-          <button type="button" class="json-tab-btn ${sub === 'investments' ? 'active' : ''}" data-subtab="investments">Investimentos</button>
-          <button type="button" class="json-tab-btn ${sub === 'loans' ? 'active' : ''}" data-subtab="loans">Empréstimos</button>
-          <button type="button" class="json-tab-btn ${sub === 'checking' ? 'active' : ''}" data-subtab="checking">Conta Corrente</button>
-          <button type="button" class="json-tab-btn ${sub === 'item' ? 'active' : ''}" data-subtab="item">Item / Conector</button>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <a href="/api/last-data" target="_blank" class="btn-copy-json" style="text-decoration: none;">Abrir em Nova Aba ↗</a>
-          <button type="button" class="btn-copy-json" id="btnCopyJson">📋 Copiar JSON</button>
-        </div>
-      </div>
-      <pre class="json-code-block" id="jsonCodeBlock"><code>${escapeHtml(jsonString)}</code></pre>
-    </div>
-  `;
-}
-
-function setupJsonInspectorListeners() {
-  document.querySelectorAll('.json-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.jsonSubTab = btn.dataset.subtab;
-      renderTabContent();
-    });
-  });
-
-  const copyBtn = document.getElementById('btnCopyJson');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', () => {
-      const code = document.getElementById('jsonCodeBlock')?.innerText;
-      if (code) {
-        navigator.clipboard.writeText(code).then(() => {
-          copyBtn.textContent = '✅ Copiado!';
-          setTimeout(() => { copyBtn.textContent = '📋 Copiar JSON'; }, 2000);
-        });
-      }
-    });
+    updateAccountsDropdown();
+    renderCurrentView();
+  } catch (fetchErr) {
+    alert('Erro ao consolidar dados da conta: ' + fetchErr.message);
   }
 }
 
-// Inspeciona o JSON de uma entidade específica
-function inspectEntityJson(entity, id) {
-  const data = state.activeData;
-  let target = null;
-
-  if (entity === 'cardTx') {
-    target = data.cardStatements?.[0]?.transactions?.find(t => t.id === id);
-  } else if (entity === 'investment') {
-    target = data.investments?.find(i => i.id === id);
-  } else if (entity === 'loan') {
-    target = data.loans?.find(l => l.id === id);
-  } else if (entity === 'chkTx') {
-    target = data.checkingTransactions?.find(t => t.id === id);
-  }
-
-  if (target) {
-    state.activeTab = 'json-inspector';
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === 'json-inspector');
-    });
-
-    const container = document.getElementById('tabContentArea');
-    const jsonString = JSON.stringify(target, null, 2);
-
-    container.innerHTML = `
-      <div class="json-viewer-container">
-        <div class="json-viewer-header">
-          <div style="font-weight: 600; font-size: 13px;">
-            📄 Inspecionando Entidade: ${entity} (ID: ${id})
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button type="button" class="btn-copy-json" onclick="window.state.activeTab='overview'; renderDashboard();">← Voltar</button>
-            <button type="button" class="btn-copy-json" id="btnCopySingleJson">📋 Copiar JSON</button>
-          </div>
-        </div>
-        <pre class="json-code-block"><code>${escapeHtml(jsonString)}</code></pre>
-      </div>
-    `;
-
-    document.getElementById('btnCopySingleJson')?.addEventListener('click', () => {
-      navigator.clipboard.writeText(jsonString).then(() => {
-        alert('JSON copiado para a área de transferência!');
-      });
-    });
-  }
-}
-
-function escapeHtml(string) {
-  return String(string)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+// Torna launchPluggyWidget acessível globalmente
+window.launchPluggyWidget = launchPluggyWidget;
+window.switchView = switchView;
 
 document.addEventListener('DOMContentLoaded', init);

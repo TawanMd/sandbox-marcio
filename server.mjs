@@ -89,7 +89,8 @@ async function createConnectToken(apiKey, clientUserId = 'sandbox-mvp-user') {
     },
     body: JSON.stringify({
       options: {
-        clientUserId
+        clientUserId,
+        clientTypes: ['BUSINESS'] // Mostra apenas contas PJ (BUSINESS_BANK)
       }
     })
   });
@@ -109,48 +110,85 @@ async function createConnectToken(apiKey, clientUserId = 'sandbox-mvp-user') {
 async function fetchItemSummary(apiKey, itemId, customPeriod = null) {
   const headers = { 'X-API-KEY': apiKey };
 
-  // 1. Consulta o status do Item
-  const itemRes = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, { headers });
-  const item = itemRes.ok ? await itemRes.json() : { id: itemId, status: 'UNKNOWN' };
+  // 1. Consulta o status do Item (com breve espera se estiver finalizando sync)
+  let itemRes = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, { headers });
+  let item = itemRes.ok ? await itemRes.json() : { id: itemId, status: 'UNKNOWN' };
 
-  // 2. Consulta as Contas
-  const accountsRes = await fetch(`${PLUGGY_API_URL}/accounts?itemId=${itemId}`, { headers });
-  const accountsData = accountsRes.ok ? await accountsRes.json() : { results: [] };
-  const accounts = accountsData.results || [];
+  if (item.status === 'UPDATING' || item.status === 'CREATING') {
+    // Aguarda até 3 segundos para o conector sandbox/produção processar os dados iniciais
+    await new Promise((r) => setTimeout(r, 2500));
+    const recheck = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, { headers });
+    if (recheck.ok) item = await recheck.json();
+  }
+
+  // 2. Consulta as Contas (com retry caso a sincronização ainda esteja finalizando)
+  let accountsRes = await fetch(`${PLUGGY_API_URL}/accounts?itemId=${itemId}`, { headers });
+  let accountsData = accountsRes.ok ? await accountsRes.json() : { results: [] };
+  let accounts = accountsData.results || [];
+
+  if (accounts.length === 0 && item.status !== 'LOGIN_ERROR' && item.status !== 'OUTDATED') {
+    await new Promise((r) => setTimeout(r, 2000));
+    accountsRes = await fetch(`${PLUGGY_API_URL}/accounts?itemId=${itemId}`, { headers });
+    accountsData = accountsRes.ok ? await accountsRes.json() : { results: [] };
+    accounts = accountsData.results || [];
+  }
 
   // Identifica contas de cartão de crédito
   const creditAccounts = accounts.filter(
     (acc) => acc.type === 'CREDIT' || acc.subtype === 'CREDIT_CARD'
   );
 
-  // 3. Período para transações do cartão (usa período customizado ou M-1 como padrão de mês fechado)
+  // 3. Transações de Cartão de Crédito via /v2/transactions
   const period = customPeriod || getMMinusOnePeriod();
   const cardStatements = [];
 
   for (const card of creditAccounts) {
-    const txRes = await fetch(
-      `${PLUGGY_API_URL}/transactions?accountId=${card.id}&from=${period.from}&to=${period.to}&pageSize=100`,
-      { headers }
-    );
-    const txData = txRes.ok ? await txRes.json() : { results: [] };
+    let txUrl = `${PLUGGY_API_URL}/v2/transactions?accountId=${card.id}`;
+    if (period?.from && period?.to) {
+      txUrl += `&dateFrom=${period.from}&dateTo=${period.to}`;
+    }
+    let txRes = await fetch(txUrl, { headers });
+    let txData = txRes.ok ? await txRes.json() : { results: [] };
+    let transactions = txData.results || [];
+
+    // Se o filtro de data fechada M-1 não encontrar lançamentos no sandbox, busca os lançamentos recentes
+    if (transactions.length === 0) {
+      const allTxRes = await fetch(`${PLUGGY_API_URL}/v2/transactions?accountId=${card.id}`, { headers });
+      if (allTxRes.ok) {
+        const allTxData = await allTxRes.json();
+        transactions = allTxData.results || [];
+      }
+    }
+
     cardStatements.push({
       account: card,
       period,
-      transactions: txData.results || [],
-      totalTransactions: txData.total || (txData.results ? txData.results.length : 0)
+      transactions,
+      totalTransactions: transactions.length
     });
   }
 
-  // 3.1 Transações de Conta Corrente
+  // 3.1 Transações de Conta Corrente via /v2/transactions
   const checkingAccounts = accounts.filter((acc) => acc.type === 'BANK');
   const checkingTransactions = [];
   for (const bank of checkingAccounts) {
-    const txRes = await fetch(
-      `${PLUGGY_API_URL}/transactions?accountId=${bank.id}&from=${period.from}&to=${period.to}&pageSize=100`,
-      { headers }
-    );
-    const txData = txRes.ok ? await txRes.json() : { results: [] };
-    checkingTransactions.push(...(txData.results || []));
+    let txUrl = `${PLUGGY_API_URL}/v2/transactions?accountId=${bank.id}`;
+    if (period?.from && period?.to) {
+      txUrl += `&dateFrom=${period.from}&dateTo=${period.to}`;
+    }
+    let txRes = await fetch(txUrl, { headers });
+    let txData = txRes.ok ? await txRes.json() : { results: [] };
+    let txs = txData.results || [];
+
+    // Se o filtro de data fechada M-1 não encontrar lançamentos no sandbox, busca os lançamentos recentes
+    if (txs.length === 0) {
+      const allTxRes = await fetch(`${PLUGGY_API_URL}/v2/transactions?accountId=${bank.id}`, { headers });
+      if (allTxRes.ok) {
+        const allTxData = await allTxRes.json();
+        txs = allTxData.results || [];
+      }
+    }
+    checkingTransactions.push(...txs);
   }
 
   // 4. Consulta de Aplicações / Investimentos
@@ -570,9 +608,9 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, lastFetchedSummary);
     } else {
       sendJson(res, 200, {
-        status: 'INFO',
-        message: 'Nenhum Item real conectado ainda nesta sessão. Exibindo os dados de referência.',
-        dadosSimulados: getMockSandboxData()
+        status: 'AGUARDANDO_CONEXAO',
+        message: 'Nenhum Item conectado ainda. Conecte sua conta via Pluggy Connect Widget para consultar os dados reais da API.',
+        data: null
       });
     }
     return;
