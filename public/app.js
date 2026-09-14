@@ -15,6 +15,10 @@ const state = {
   }
 };
 
+// Disponibiliza o state globalmente para visualização imediata no console do navegador
+window.state = state;
+window.getPluggyJson = () => state.activeData;
+
 // Formatação BRL (R$ 0.000,00)
 function formatMoney(amount) {
   if (amount === null || amount === undefined || isNaN(amount)) return 'R$ 0,00';
@@ -286,6 +290,8 @@ async function launchPluggyWidget() {
           const f = state.currentFilter;
           const itemRes = await fetch(`/api/item-data?itemId=${itemId}&from=${f.from}&to=${f.to}&label=${encodeURIComponent(f.label)}`);
           state.activeData = await itemRes.json();
+          console.log('📦 JSON COMPLETO RETORNADO DA API DA PLUGGY:', state.activeData);
+          console.log('💡 Dica: Você também pode abrir http://localhost:3000/api/last-data para ver este JSON formatado.');
           document.getElementById('connectOverlay').style.display = 'none';
           renderTable();
         } catch (fetchErr) {

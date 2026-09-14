@@ -18,9 +18,10 @@ try {
 const PORT = process.env.PORT || 3000;
 const PLUGGY_API_URL = 'https://api.pluggy.ai';
 
-// Cache do token da API Pluggy
+// Cache do token da API Pluggy e do último resultado consultado
 let cachedApiKey = null;
 let apiKeyExpiresAt = 0;
+let lastFetchedSummary = null;
 
 /**
  * Calcula o período de M-1 (mês anterior completo)
@@ -546,6 +547,7 @@ const server = http.createServer(async (req, res) => {
       const customPeriod = (from && to) ? { from, to, label: label || `${from} a ${to}` } : null;
       const apiKey = await getApiKey(overrideClientId, overrideClientSecret);
       const summary = await fetchItemSummary(apiKey, itemId, customPeriod);
+      lastFetchedSummary = summary;
       sendJson(res, 200, summary);
     } catch (err) {
       sendJson(res, 500, { error: err.message });
@@ -559,6 +561,20 @@ const server = http.createServer(async (req, res) => {
     const to = parsedUrl.searchParams.get('to');
     const label = parsedUrl.searchParams.get('label');
     sendJson(res, 200, getMockSandboxData(from, to, label));
+    return;
+  }
+
+  // 5. Retorna o último JSON retornado da API da Pluggy
+  if (pathname === '/api/last-data' && req.method === 'GET') {
+    if (lastFetchedSummary) {
+      sendJson(res, 200, lastFetchedSummary);
+    } else {
+      sendJson(res, 200, {
+        status: 'INFO',
+        message: 'Nenhum Item real conectado ainda nesta sessão. Exibindo os dados de referência.',
+        dadosSimulados: getMockSandboxData()
+      });
+    }
     return;
   }
 
