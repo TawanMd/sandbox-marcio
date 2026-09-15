@@ -1,41 +1,26 @@
-# MVP Pluggy Sandbox — Mister Contador / Conta Azul
+# Mister Contador + Pluggy
 
-Ambiente de validação e demonstração da integração com a API da **Pluggy** (Open Finance & Sandbox) focado no fluxo contábil de contas **Pessoa Jurídica (PJ)**, reproduzindo a interface de conciliação e partidas dobradas do **Mister Contador**.
+Este projeto integra o Mister Contador à API da Pluggy (Open Finance) para contas de Pessoa Jurídica (PJ).
 
----
+## Casos de uso
 
-## 🎯 Casos de Uso PJ Validados
+* Extrato de cartão de crédito PJ com regra de mês anterior fechado (M-1), filtro de período e detalhamento de parcelamentos e faturas.
+* Posições de investimentos PJ (CDBs, Tesouro Direto, Fundos) com indexadores (CDI/SELIC), taxas e saldo atualizado.
+* Contratos de empréstimo PJ (Capital de Giro/Pronampe) via Open Finance, mostrando saldo devedor, taxa de juros e parcelas pagas e a vencer.
 
-1. **Extrato de Cartão de Crédito PJ:**
-   * Regra padrão de **mês anterior fechado (M-1)**.
-   * Filtro interativo por período (atalhos rápidos de meses ou intervalo personalizado "De" / "Até").
-   * Lançamentos com despesas, valores, faturas e parcelamentos.
-
-2. **Conta de Aplicação / Investimentos PJ:**
-   * Consulta de posições de CDBs com liquidez diária, Tesouro Direto e Fundos de Investimento PJ.
-   * Exibição de indexadores (CDI / SELIC), taxas e saldo atualizado.
-
-3. **Conta de Empréstimo PJ (Open Finance):**
-   * Contratos de crédito empresarial (Capital de Giro / Pronampe).
-   * Acompanhamento de saldo devedor, CET / taxa de juros mensal e parcelas pagas vs. a vencer.
-
----
-
-## 🌐 Rotas Disponíveis
+## Rotas
 
 | Rota | Descrição |
 | :--- | :--- |
-| `http://localhost:3000/` | **Fluxo com Widget:** Abre o widget oficial da Pluggy Connect em primeiro plano sobre a tela do Mister para conectar a conta e carregar os dados reais. |
-| `http://localhost:3000/simulado` | **Apresentação Direta:** Abre diretamente a tela do Mister no formato Excel preenchida com o JSON simulado, sem atrito de login. |
+| `http://localhost:3000/` | Abre a tela do Mister Contador com o widget da Pluggy Connect para conectar a conta real. |
+| `http://localhost:3000/simulado` | Abre a tela com dados simulados, sem pedir login. |
 
----
+## Como executar
 
-## 🚀 Como Executar
+O projeto usa HTML, CSS, JavaScript puro no frontend e Node.js nativo (`server.mjs`) no backend. Você não precisa rodar `npm install`.
 
-O projeto foi desenvolvido em **HTML5 + CSS + JavaScript Vanilla** no frontend e **Node.js nativo** (`server.mjs`) no backend, sem necessidade de dependências externas (`node_modules` ou `npm install`).
-
-### 1. Configuração do `.env`
-Preencha as credenciais da Pluggy obtidas no [Dashboard da Pluggy](https://dashboard.pluggy.ai):
+### 1. Configurar o `.env`
+Adicione as credenciais obtidas no [Dashboard da Pluggy](https://dashboard.pluggy.ai):
 
 ```env
 PLUGGY_CLIENT_ID=seu_client_id_aqui
@@ -43,53 +28,45 @@ PLUGGY_CLIENT_SECRET=seu_client_secret_aqui
 PORT=3000
 ```
 
-### 2. Iniciar o Servidor
-Certifique-se de ter o Node.js instalado (v18+) e execute:
+### 2. Iniciar o servidor
+Requer Node.js v18+.
 
 ```bash
 node server.mjs
 ```
 
-O servidor iniciará em `http://localhost:3000`.
+O servidor responde em `http://localhost:3000`.
 
----
+## Dados de teste no Sandbox
 
-## 🧪 Dados de Teste no Sandbox
+Na rota inicial (`/`), use o conector de testes:
+* Instituição: Pluggy Bank (Sandbox)
+* Usuário: `user-ok`
+* Senha: `password-ok`
 
-Ao utilizar o Widget na rota inicial (`/`), utilize o conector de testes:
+## Conectores PJ reais (Open Finance)
 
-* **Instituição:** `Pluggy Bank (Sandbox)`
-* **Usuário:** `user-ok`
-* **Senha:** `password-ok`
+Para testar empréstimos PJ (`/loans`) junto com cartões e investimentos em produção, use os conectores Open Finance (`[OF]`):
+* Itaú Empresas
+* Banco do Brasil Empresas
+* Bradesco Empresas
+* Santander Empresas
+* BTG Pactual Empresas
+* Banco Inter PJ
+* C6 Bank Empresas
+* Sicoob, Sicredi, Unicred
 
----
-
-## 🏛️ Conectores Reais PJ Recomendados (Open Finance)
-
-Para testes futuros em ambiente real com dados PJ, recomenda-se utilizar os conectores via **Open Finance** (`[OF]`), pois são os únicos que suportam **Empréstimos PJ (`/loans`)** em conjunto com **Cartão** e **Investimentos**:
-
-* **Itaú Empresas**
-* **Banco do Brasil Empresas**
-* **Bradesco Empresas**
-* **Santander Empresas**
-* **BTG Pactual Empresas**
-* **Banco Inter PJ**
-* **C6 Bank Empresas**
-* **Cooperativas (Sicoob, Sicredi, Unicred)**
-
----
-
-## 📁 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
-├── .agents/skills/      # Skills e regras de integração Pluggy
+├── .agents/skills/      # Regras de integração
 ├── public/
-│   ├── index.html       # Interface visual do Mister Contador
-│   ├── style.css        # Identidade visual e layout Excel
+│   ├── index.html       # Interface visual
+│   ├── style.css        # Layout
 │   └── app.js           # Lógica do widget, filtros e renderização
-├── .env                 # Configurações de ambiente (credenciais)
+├── .env                 # Configurações de ambiente
 ├── .env.example         # Exemplo de configuração
-├── server.mjs           # Servidor HTTP nativo e endpoints de API
-└── README.md            # Documentação do projeto
+├── server.mjs           # Servidor HTTP nativo
+└── README.md            # Documentação
 ```
 
