@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Script Oficial do Pluggy Connect Widget (v2.11.0) -->
-  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.11.0/pluggy-connect.js"></script>
+  <!-- Pluggy Connect Widget v2.11.0: cópia local (evita bloqueio de CDN/extensões); app.js usa o CDN como reserva -->
+  <script src="vendor/pluggy-connect-2.11.0.js"></script>
 </head>
 <body>
   <!-- Topbar Azul Escuro (#002b80) Fiel ao Print do Mister Contador -->
@@ -26,12 +26,8 @@
 
     <div class="topbar-right">
       <span class="empresa-label">Empresa:</span>
-      <div class="empresa-pill" id="empresaPillName" title="Razão Social da Empresa">
-        EMPRESA TESTE MISTER CONTADOR LTDA
-      </div>
-      <div class="cnpj-pill" id="cnpjPill" title="CNPJ da Empresa">
-        00000000000191
-      </div>
+      <div class="empresa-pill" id="empresaPillName" title="Razão Social da Empresa">Aguardando conexão</div>
+      <div class="cnpj-pill" id="cnpjPill" title="CNPJ da Empresa">—</div>
     </div>
   </header>
 
@@ -135,7 +131,7 @@
             <!-- Seletor de Período M-1 -->
             <div class="date-filter-wrapper">
               <button type="button" class="btn-mister-date" id="periodBtn">
-                <span id="periodBtnText">agosto de 2026</span>
+                <span id="periodBtnText"></span>
                 <span class="calendar-icon">📅</span>
               </button>
 
@@ -148,10 +144,10 @@
                 <div class="popover-presets">
                   <span class="popover-label">Atalhos rápidos:</span>
                   <div class="preset-grid">
-                    <button type="button" class="preset-btn active" data-preset="m-1">M-1 Fechado (Agosto/2026)</button>
-                    <button type="button" class="preset-btn" data-preset="current">Mês Atual (Setembro/2026)</button>
-                    <button type="button" class="preset-btn" data-preset="m-2">Julho/2026 (M-2)</button>
-                    <button type="button" class="preset-btn" data-preset="m-3">Junho/2026 (M-3)</button>
+                    <button type="button" class="preset-btn active" data-preset="m-1">M-1 Fechado</button>
+                    <button type="button" class="preset-btn" data-preset="current">Mês Atual</button>
+                    <button type="button" class="preset-btn" data-preset="m-2">M-2</button>
+                    <button type="button" class="preset-btn" data-preset="m-3">M-3</button>
                   </div>
                 </div>
                 <div class="popover-custom">
@@ -187,7 +183,7 @@
             <div class="account-select-pill">
               <span class="book-icon">📗</span>
               <select class="mister-account-dropdown" id="accountSelect">
-                <option value="all">1/465155 - Pluggy Bank (Conta PJ)</option>
+                <option value="all">Todas as Contas</option>
               </select>
             </div>
           </div>
@@ -246,7 +242,7 @@
         <div class="sandbox-instructions-box">
           <h4>🧪 Como conectar no ambiente Sandbox:</h4>
           <ul>
-            <li>No widget da Pluggy que abrirá, selecione <strong>Pluggy Bank (Sandbox)</strong>.</li>
+            <li>No widget da Pluggy que abrirá , escolha a aba <strong>Empresas</strong>, <strong>Pessoa Física</strong> ou <strong>Corretoras</strong> e selecione o conector de teste (ex.: <strong>Pluggy Bank Business</strong>, <strong>Pluggy Bank</strong> ou <strong>Pluggy Bank Investment</strong>).</li>
             <li>Insira as credenciais de teste:
               <span class="code-pill">user-ok</span> e <span class="code-pill">password-ok</span>
             </li>

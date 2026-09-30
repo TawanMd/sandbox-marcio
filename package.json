@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "MVP de validação da integração com Pluggy Sandbox (HTML + CSS + JS)",
   "type": "module",
+  "engines": { "node": ">=20.6" },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node server.mjs --test"
+    "test": "node server.mjs --test && node test/smoke.mjs"
   },
   "keywords": ["pluggy", "sandbox", "open-finance", "mvp"],
   "author": "",

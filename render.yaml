@@ -1,0 +1,23 @@
+# Blueprint do Render (https://render.com): cria o serviço web a partir do repositório.
+# Os segredos (marcados sync: false) são preenchidos no painel do Render, nunca no git.
+services:
+  - type: web
+    name: mister-contador-pluggy
+    runtime: node
+    plan: free
+    buildCommand: echo "sem build"
+    startCommand: node server.mjs
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PLUGGY_CLIENT_ID
+        sync: false
+      - key: PLUGGY_CLIENT_SECRET
+        sync: false
+      - key: APP_USER
+        value: marcio
+      - key: APP_PASSWORD
+        sync: false
+      - key: PLUGGY_INCLUDE_SANDBOX
+        value: "true"
