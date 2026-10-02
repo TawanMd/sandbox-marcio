@@ -1,23 +1,51 @@
-# Blueprint do Render (https://render.com): cria o serviço web a partir do repositório.
+# Blueprint do Render (https://render.com): cria o Web Service a partir do repositório.
 # Os segredos (marcados sync: false) são preenchidos no painel do Render, nunca no git.
+#
+# Versão do Node: vem do arquivo .node-version (24 = última 24.x LTS). Ordem de precedência no
+# Render: NODE_VERSION (painel) > .node-version > .nvmrc > "engines" do package.json.
+# Não defina NODE_VERSION no painel, senão ele passa a mandar no lugar do .node-version.
 services:
   - type: web
     name: mister-contador-pluggy
     runtime: node
+    # Plano free: o serviço "dorme" sem uso e a primeira abertura leva cerca de 1 minuto.
     plan: free
-    buildCommand: echo "sem build"
+    # Sem dependências (nada de npm install). O comando só registra no log a versão do Node usada.
+    buildCommand: node --version
     startCommand: node server.mjs
     healthCheckPath: /healthz
     envVars:
+      # Produção: exige APP_PASSWORD e as chaves da Pluggy, liga o HSTS, desliga o sandbox por padrão
+      # e recusa Client ID/Secret digitados na tela
       - key: NODE_ENV
         value: production
+      # O Render exige escutar em 0.0.0.0 (a porta vem da variável PORT, definida pelo próprio Render)
+      - key: HOST
+        value: "0.0.0.0"
+      # Credenciais da aplicação Pluggy (Dashboard da Pluggy). Só aqui, nunca na tela nem no git.
       - key: PLUGGY_CLIENT_ID
         sync: false
       - key: PLUGGY_CLIENT_SECRET
         sync: false
+      # Login HTTP Basic do Márcio. APP_USER também é o clientUserId enviado à Pluggy.
       - key: APP_USER
         value: marcio
+      # Senha forte com no mínimo 12 caracteres (o servidor não sobe em produção com menos).
+      # Envie ao Márcio por um canal diferente do link.
       - key: APP_PASSWORD
         sync: false
+      # Conectores de teste da Pluggy (Pluggy Bank / Pluggy Bank Business / Pluggy Bank Investment).
+      # Fica "true" enquanto a Pluggy não libera a aplicação para conectores reais (produção).
+      # Troque para "false" AQUI (o render.yaml é a fonte do Blueprint) antes de conectar contas reais.
       - key: PLUGGY_INCLUDE_SANDBOX
         value: "true"
+      # Quantos proxies confiáveis acrescentam IP no X-Forwarded-For; define qual IP conta no limite de
+      # senhas erradas. 0 = ignora o cabeçalho (Docker/VPS sem proxy na frente).
+      # Como descobrir (passo a passo no README, "Descobrir TRUST_PROXY_HOPS"): mande uma requisição com
+      # "curl -H 'X-Forwarded-For: 1.1.1.1' https://<app>.onrender.com/healthz", registre uma vez no log o
+      # cabeçalho que chegou e conte, da DIREITA para a esquerda, a posição do seu IP real
+      # (https://ifconfig.me): "1.1.1.1, <seu IP>" = 1; "1.1.1.1, <seu IP>, <IP do proxy>" = 2.
+      # 1 é o padrão seguro: nunca lê o valor forjado (se houver mais saltos, as falhas só passam a ser
+      # contadas juntas). Nunca use um número MAIOR que o real: aí quem ataca volta a escolher o IP.
+      - key: TRUST_PROXY_HOPS
+        value: "1"

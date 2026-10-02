@@ -1,6 +1,11 @@
-﻿node_modules/
+node_modules/
 *.log
 .DS_Store
 Thumbs.db
-.env
 .claude/
+
+# Variáveis de ambiente com segredos (PLUGGY_CLIENT_SECRET, APP_PASSWORD): nunca versionar.
+# Cobre .env e variantes (.env.local, .env.production...). Só o modelo .env.example vai para o git.
+.env
+.env.*
+!.env.example

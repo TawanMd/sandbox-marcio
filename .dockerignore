@@ -4,7 +4,11 @@
 !.env.example
 node_modules
 .agents
+.claude
 .cursor
 .vscode
 test
+test-pluggy-mcp.mjs
+mcp_config.json
+skills-lock.json
 *.log
